@@ -22,7 +22,10 @@ jobs:
         include:
           - os: macos-14
             target: aarch64-apple-darwin
-          - os: macos-13
+          # Cross-compile the Intel-mac binary on the Apple-Silicon runner (the
+          # macOS SDK is universal). Avoids the frequently-backed-up macos-13
+          # queue that left v0.2.0 without an x86_64-apple-darwin asset.
+          - os: macos-14
             target: x86_64-apple-darwin
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
