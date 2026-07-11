@@ -1,6 +1,8 @@
 //! Command-line surface for `tojfl`, defined with clap-derive.
 
 use clap::{Args, Parser, Subcommand};
+use clap_complete::Shell;
+pub use pk_cli_selfupdate::SelfUpdateArgs;
 
 /// tojfl — command-line client for the Town of Jupiter, FL utility portal.
 ///
@@ -42,6 +44,14 @@ pub struct GlobalOpts {
     /// Verbose diagnostics on stderr.
     #[arg(short, long, global = true)]
     pub verbose: bool,
+
+    /// Suppress non-error stderr output.
+    #[arg(short, long, global = true)]
+    pub quiet: bool,
+
+    /// Disable ANSI color. Also honored via $NO_COLOR.
+    #[arg(long, global = true, env = "NO_COLOR")]
+    pub no_color: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -90,16 +100,16 @@ pub enum Command {
 
     /// Update tojfl in place from the latest GitHub release.
     SelfUpdate(SelfUpdateArgs),
-}
 
-#[derive(Debug, Args)]
-pub struct SelfUpdateArgs {
-    /// Only report whether a newer release exists; don't install it.
-    #[arg(long)]
-    pub check: bool,
-    /// Don't prompt for confirmation before replacing the binary.
-    #[arg(short = 'y', long)]
-    pub yes: bool,
+    /// Print a shell completion script (e.g. `tojfl completions zsh`).
+    Completions {
+        /// Shell to generate completions for.
+        #[arg(value_enum)]
+        shell: Shell,
+    },
+
+    /// Machine-readable capability discovery (cli-info/v1).
+    Info,
 }
 
 #[derive(Debug, Subcommand)]

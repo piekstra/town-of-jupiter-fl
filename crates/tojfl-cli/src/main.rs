@@ -15,12 +15,45 @@ use tojfl_sdk::Config;
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
+    let json_mode = cli.global.json;
     match run(cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
+            let cli_err = to_cli_error(&err);
+            if json_mode {
+                pk_cli_core::output::json(&cli_err.to_json());
+            }
             eprintln!("error: {err:#}");
-            ExitCode::FAILURE
+            ExitCode::from(cli_err.exit_code() as u8)
         }
+    }
+}
+
+/// Map SDK/anyhow errors onto the family exit-code contract (SPEC v1 §1.5).
+fn to_cli_error(err: &anyhow::Error) -> pk_cli_core::CliError {
+    use pk_cli_core::CliError;
+    use tojfl_sdk::Error as E;
+    if let Some(e) = err.downcast_ref::<CliError>() {
+        // Re-key a family error (e.g. from the shared self-updater).
+        return match e {
+            CliError::Usage(m) => CliError::Usage(m.clone()),
+            CliError::Auth(m) => CliError::Auth(m.clone()),
+            CliError::NotFound(m) => CliError::NotFound(m.clone()),
+            CliError::Upstream(m) => CliError::Upstream(m.clone()),
+            CliError::ConfirmationRequired(m) => CliError::ConfirmationRequired(m.clone()),
+            CliError::Keychain(m) => CliError::Keychain(m.clone()),
+            CliError::Other(m) => CliError::Other(m.clone()),
+        };
+    }
+    match err.downcast_ref::<E>() {
+        Some(E::Auth(m)) => CliError::Auth(m.clone()),
+        Some(E::NotAuthenticated) => CliError::Auth(E::NotAuthenticated.to_string()),
+        Some(E::Http(e)) => CliError::Upstream(e.to_string()),
+        Some(E::Portal(m)) | Some(E::Parse(m)) => CliError::Upstream(m.clone()),
+        Some(E::MissingFormField(m)) => CliError::Upstream(m.clone()),
+        Some(E::Invalid(m)) | Some(E::Config(m)) => CliError::Usage(m.clone()),
+        Some(E::Keychain(m)) => CliError::Keychain(m.clone()),
+        _ => CliError::Other(format!("{err:#}")),
     }
 }
 
@@ -62,6 +95,12 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Command::Ebill(c) => commands::ebill(&ctx, c),
         Command::Contact => commands::contact(&ctx),
         Command::Config(c) => commands::config_cmd(&ctx, c),
-        Command::SelfUpdate(a) => selfupdate::run(a),
+        Command::SelfUpdate(a) => selfupdate::run(a, cli.global.json, cli.global.quiet),
+        Command::Completions { shell } => {
+            use clap::CommandFactory;
+            clap_complete::generate(*shell, &mut Cli::command(), "tojfl", &mut std::io::stdout());
+            Ok(())
+        }
+        Command::Info => commands::info(&ctx),
     }
 }

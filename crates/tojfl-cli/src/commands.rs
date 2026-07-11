@@ -100,22 +100,41 @@ fn auth_logout(ctx: &Ctx, forget: bool) -> Result<()> {
 }
 
 fn auth_status(ctx: &Ctx) -> Result<()> {
+    use pk_cli_auth::{AuthMethod, AuthStatus};
     let portal = ctx.portal()?;
     let authed = portal.is_authenticated().unwrap_or(false);
-    if ctx.fmt.json {
-        ctx.fmt.print_json(&serde_json::json!({
-            "authenticated": authed,
-            "username": portal.username(),
-            "base_url": portal.base_url(),
-        }))?;
-    } else {
-        let who = portal.username().unwrap_or("(unknown)");
-        if authed {
-            println!("✓ Authenticated as {who} at {}", portal.base_url());
-        } else {
-            println!("✗ Not authenticated. Run `tojfl auth login`.");
-        }
-    }
+    let mut st = AuthStatus::new(true, authed, AuthMethod::Password);
+    st.username = portal.username().map(String::from);
+    st.session_valid = Some(authed);
+    st.emit(ctx.fmt.json);
+    Ok(())
+}
+
+/// `info` — cli-info/v1 capability discovery.
+pub fn info(_ctx: &Ctx) -> Result<()> {
+    use pk_cli_core::info::{AuthInfo, CliInfo};
+    let info = CliInfo::new(
+        "tojfl",
+        env!("CARGO_PKG_VERSION"),
+        "https://github.com/piekstra/town-of-jupiter-fl",
+        AuthInfo {
+            required: true,
+            method: "password".into(),
+            login_hint: Some("tojfl auth login --save".into()),
+        },
+        &[
+            "account",
+            "balance",
+            "bills",
+            "usage",
+            "transactions",
+            "pay",
+            "profile",
+            "ebill",
+            "contact",
+        ],
+    );
+    pk_cli_core::output::json(&serde_json::to_value(&info)?);
     Ok(())
 }
 
