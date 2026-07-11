@@ -9,7 +9,7 @@
 //!      being shown the login form.
 
 use crate::client::Client;
-use crate::dnn::{find_input_name_ending_with, find_name_by_id_ending_with, FormState};
+use crate::dnn::{find_input_name_ending_with, find_postback_target, FormState};
 use crate::error::{Error, Result};
 use crate::pages;
 
@@ -27,12 +27,15 @@ pub fn login(client: &Client, username: &str, password: &str) -> Result<()> {
     form.set(&user_field, username);
     form.set(&pass_field, password);
 
-    // The login button posts back via WebForm_DoPostBackWithOptions with the
-    // command control as the event target. Its name ends with `cmdLogin`.
-    if let Some(login_btn) = find_name_by_id_ending_with(&page, "cmdLogin")
+    // The login button is a DNN LinkButton that posts back via
+    // WebForm_DoPostBackWithOptions. Use the exact `$`-delimited event target
+    // from that call (NOT the element id, whose `_` separators can't be mapped
+    // back to `$` because names like `Login_DNN` contain literal underscores).
+    // Fall back to an input-submit name for deployments that render one.
+    if let Some(login_target) = find_postback_target(&page, "cmdLogin")
         .or_else(|| find_input_name_ending_with(&page, "cmdLogin"))
     {
-        form.with_event(&login_btn, "");
+        form.with_event(&login_target, "");
     }
 
     let action = form

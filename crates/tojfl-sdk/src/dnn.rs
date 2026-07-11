@@ -140,6 +140,19 @@ pub fn find_input_name_ending_with(html: &str, suffix: &str) -> Option<String> {
     None
 }
 
+/// Find the exact `__doPostBack` / `WebForm_PostBackOptions` **event target**
+/// (the `$`-delimited UniqueID) for a control whose name ends with `suffix`.
+///
+/// DNN LinkButtons render as `<a>` with no `name`; their id uses `_` separators
+/// while the postback target uses `$` — and the two are NOT inter-convertible
+/// (segments like `Login_DNN` contain literal underscores). The target string
+/// appears verbatim inside the anchor's `WebForm_DoPostBackWithOptions(...)` /
+/// `__doPostBack(...)` call, so we pull it straight from the raw HTML.
+pub fn find_postback_target(html: &str, suffix: &str) -> Option<String> {
+    let re = regex::Regex::new(&format!(r"dnn\$[\w$]*?{}", regex::escape(suffix))).ok()?;
+    re.find(html).map(|m| m.as_str().to_string())
+}
+
 /// Find the fully-qualified name of an element whose `id` ends with `suffix`.
 pub fn find_name_by_id_ending_with(html: &str, suffix: &str) -> Option<String> {
     let doc = Html::parse_document(html);
@@ -199,5 +212,22 @@ mod tests {
     fn finds_input_by_suffix() {
         let name = find_input_name_ending_with(SAMPLE, "txtUsername").unwrap();
         assert_eq!(name, "dnn$ctr1216$Login$Login_DNN$txtUsername");
+    }
+
+    #[test]
+    fn extracts_postback_target_dollar_form() {
+        // A DNN LinkButton: id uses `_`, the postback target uses `$`, and the
+        // two are NOT convertible (Login_DNN has a literal underscore).
+        let html = r#"<a id="dnn_ctr1216_Login_Login_DNN_cmdLogin"
+            href="javascript:WebForm_DoPostBackWithOptions(new WebForm_PostBackOptions(&quot;dnn$ctr1216$Login$Login_DNN$cmdLogin&quot;, &quot;&quot;, true, &quot;&quot;, &quot;&quot;, false, true))">Login</a>"#;
+        assert_eq!(
+            find_postback_target(html, "cmdLogin").as_deref(),
+            Some("dnn$ctr1216$Login$Login_DNN$cmdLogin")
+        );
+        // The id (underscore form) must NOT be what we use as the event target.
+        assert_ne!(
+            find_postback_target(html, "cmdLogin").as_deref(),
+            Some("dnn_ctr1216_Login_Login_DNN_cmdLogin")
+        );
     }
 }

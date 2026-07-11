@@ -56,6 +56,25 @@ DNN prefixes are volatile; match on the suffix.
 - account number field (labeled "Account Number", leading/trailing zeros)
 - `…$Email$Email_TextBox`, `…$Password$Password_TextBox`, confirmations
 
+## Authenticated data grids (validated against a real account)
+
+The eCARE data lives in ASP.NET **GridView** tables, not the surrounding layout.
+DNN renders its navigation menus as nested `<table>`s, so scraping must target
+the grid by id (`…GridView1`) and skip menu/script tables — matching "the
+biggest table" grabs the menu instead.
+
+| Page | Grid id (suffix) | Columns |
+| --- | --- | --- |
+| `BillingHistory.aspx` | `…BillingHistory_GridView1` | Bill Date, Balance Forward, Current Bill, Bill Total, Web Bill |
+| `TransactionHistory.aspx` | `…TransactionHistory_GridView1` | Date, Description, Amount, Balance |
+| `Home.aspx` (post-login) | embeds the billing grid | plus a `Customer/Account #:` label |
+
+Not yet wired up:
+- `UsageHistory.aspx` — form-first (`…$UsageHistory$ctlServices` service dropdown
+  + a submit LinkButton); the consumption grid appears only after that postback.
+- `UserProfile.aspx` — renders a DNN message inbox, not the profile fields; the
+  real profile surface is elsewhere.
+
 ## Scraping strategy
 
 Data pages render HTML `<table>`s whose exact columns vary. Rather than pin

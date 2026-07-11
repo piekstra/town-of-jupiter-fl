@@ -14,6 +14,8 @@ use std::collections::BTreeMap;
 /// A simple parsed HTML table.
 #[derive(Debug, Clone)]
 pub struct Table {
+    /// The table's `id` attribute, if any (used to find eCARE data grids).
+    pub id: Option<String>,
     pub headers: Vec<String>,
     pub rows: Vec<Vec<String>>,
 }
@@ -25,6 +27,34 @@ impl Table {
             let hl = h.to_lowercase();
             keywords.iter().any(|k| hl.contains(k))
         })
+    }
+
+    /// Whether this looks like an eCARE data grid (an ASP.NET GridView) rather
+    /// than a layout/navigation table. DNN renders its menus as nested tables,
+    /// so id-based detection is far more reliable than "biggest table wins".
+    fn is_data_grid(&self) -> bool {
+        self.id
+            .as_deref()
+            .map(|id| {
+                let l = id.to_lowercase();
+                l.contains("gridview") || l.contains("grdview") || l.contains("grid")
+            })
+            .unwrap_or(false)
+    }
+
+    /// Detect layout/menu tables to exclude: their "cells" carry script or the
+    /// DNN SolPartMenu payload rather than tabular data.
+    fn is_noise(&self) -> bool {
+        let joined = self.headers.join(" ");
+        joined.len() > 400
+            || self.headers.iter().any(|h| {
+                let l = h.to_lowercase();
+                l.contains("function ")
+                    || l.contains("preloadimages")
+                    || l.contains("ddr.menu")
+                    || l.contains("mm_")
+                    || h.len() > 120
+            })
     }
 }
 
@@ -46,6 +76,7 @@ pub fn extract_tables(html: &str) -> Vec<Table> {
 
     let mut tables = Vec::new();
     for table in doc.select(&table_sel) {
+        let id = table.value().attr("id").map(|s| s.to_string());
         let rows: Vec<ElementRef> = table.select(&tr_sel).collect();
         if rows.is_empty() {
             continue;
@@ -79,21 +110,66 @@ pub fn extract_tables(html: &str) -> Vec<Table> {
         if body.is_empty() {
             continue;
         }
-        tables.push(Table {
+        let t = Table {
+            id,
             headers,
             rows: body,
-        });
+        };
+        // Drop DNN menu/layout/script tables so they can't masquerade as data.
+        if !t.is_noise() {
+            tables.push(t);
+        }
     }
     tables
 }
 
 /// Pick the table most likely to hold rows relevant to `keywords` in its headers.
+///
+/// Prefers a real eCARE data grid (an ASP.NET GridView, detected by id) whose
+/// headers match. Only if no grid matches does it fall back to the largest
+/// keyword-matching table — never blindly to "the biggest table on the page",
+/// which on a DNN site is usually the navigation menu.
 fn best_table<'a>(tables: &'a [Table], keywords: &[&str]) -> Option<&'a Table> {
     tables
         .iter()
-        .filter(|t| t.col(keywords).is_some())
+        .filter(|t| t.is_data_grid() && t.col(keywords).is_some())
         .max_by_key(|t| t.rows.len())
-        .or_else(|| tables.iter().max_by_key(|t| t.rows.len()))
+        .or_else(|| {
+            tables
+                .iter()
+                .filter(|t| t.is_data_grid())
+                .max_by_key(|t| t.rows.len())
+        })
+        .or_else(|| {
+            tables
+                .iter()
+                .filter(|t| t.col(keywords).is_some())
+                .max_by_key(|t| t.rows.len())
+        })
+}
+
+/// Like [`best_table`] but only considers real data grids (or, for tests, a
+/// keyword-matching table when no ids are present). Used where matching a
+/// non-grid layout fragment would produce garbage (e.g. the usage page).
+fn best_grid<'a>(tables: &'a [Table], keywords: &[&str]) -> Option<&'a Table> {
+    // Prefer a keyword-matching grid; else, if any grid ids exist at all, the
+    // largest grid; else (no ids on the page, i.e. a unit-test fixture) fall
+    // back to a keyword match so parser logic stays testable.
+    let any_ids = tables.iter().any(|t| t.id.is_some());
+    tables
+        .iter()
+        .filter(|t| t.is_data_grid() && t.col(keywords).is_some())
+        .max_by_key(|t| t.rows.len())
+        .or_else(|| {
+            if any_ids {
+                None
+            } else {
+                tables
+                    .iter()
+                    .filter(|t| t.col(keywords).is_some())
+                    .max_by_key(|t| t.rows.len())
+            }
+        })
 }
 
 fn build_extra(
@@ -146,9 +222,18 @@ pub fn parse_bills(html: &str) -> Vec<Bill> {
 }
 
 /// Parse the usage/consumption table into [`UsageRecord`]s.
+///
+/// `UsageHistory.aspx` is a form-first page: the consumption grid only renders
+/// after a service type is selected and submitted. Until that postback flow is
+/// implemented, the bare page has no data grid, so this returns empty rather
+/// than latching onto the "Consumption Comparison" form fragment. Restricted to
+/// real data grids for exactly that reason.
 pub fn parse_usage(html: &str) -> Vec<UsageRecord> {
     let tables = extract_tables(html);
-    let table = match best_table(&tables, &["usage", "consumption", "gallons", "period"]) {
+    let table = match best_grid(
+        &tables,
+        &["usage", "consumption", "gallons", "period", "reading"],
+    ) {
         Some(t) => t,
         None => return Vec::new(),
     };
@@ -237,25 +322,33 @@ pub fn parse_profile(html: &str) -> Profile {
     p
 }
 
-/// Extract a best-effort account summary (balance, due date, account number)
-/// from the post-login landing/home page.
+/// Extract a best-effort account summary from the post-login home page, which
+/// carries a `Customer/Account #:` label and embeds the billing-history grid.
 pub fn parse_account_summary(html: &str) -> Account {
-    let mut acct = Account::default();
     let doc = Html::parse_document(html);
 
-    // Balance / amount due labels.
-    acct.balance = find_labeled_money(
-        &doc,
-        &["balance", "amount due", "current balance", "total due"],
-    );
-    if let Some(due) = find_labeled_text(&doc, &["due date", "payment due"]) {
-        acct.due_date = Some(due);
-    }
-    if let Some(addr) = find_labeled_text(&doc, &["service address", "address"]) {
-        acct.service_address = Some(addr);
-    }
-    if let Some(name) = find_labeled_text(&doc, &["account name", "name on account"]) {
-        acct.name = Some(name);
+    let mut acct = Account {
+        balance: find_labeled_money(
+            &doc,
+            &["balance", "amount due", "current balance", "total due"],
+        ),
+        due_date: find_labeled_text(&doc, &["due date", "payment due"]),
+        service_address: find_labeled_text(&doc, &["service address"]),
+        name: find_labeled_text(&doc, &["account name", "name on account"]),
+        account_number: find_labeled_text(
+            &doc,
+            &["customer/account", "account #", "account number"],
+        )
+        .unwrap_or_default(),
+        ..Default::default()
+    };
+
+    // The home page embeds the billing grid. If no balance was labeled directly,
+    // use the most recent bill's total as the current amount.
+    if acct.balance.is_none() {
+        if let Some(latest) = parse_bills(html).into_iter().next() {
+            acct.balance = latest.amount.or(latest.balance);
+        }
     }
     acct
 }
