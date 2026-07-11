@@ -18,6 +18,10 @@ pub struct Table {
     pub id: Option<String>,
     pub headers: Vec<String>,
     pub rows: Vec<Vec<String>>,
+    /// Per-row statement-PDF (`ctl=VieweBill`) link, aligned 1:1 with `rows`.
+    /// `None` for rows without one (only some bills expose an eBill). Captured
+    /// per row — never by document order — so it can't misalign.
+    pub row_links: Vec<Option<String>>,
 }
 
 impl Table {
@@ -73,6 +77,7 @@ pub fn extract_tables(html: &str) -> Vec<Table> {
     let tr_sel = Selector::parse("tr").unwrap();
     let th_sel = Selector::parse("th").unwrap();
     let td_sel = Selector::parse("td").unwrap();
+    let ebill_sel = Selector::parse(r#"a[href*="VieweBill"]"#).unwrap();
 
     let mut tables = Vec::new();
     for table in doc.select(&table_sel) {
@@ -100,12 +105,21 @@ pub fn extract_tables(html: &str) -> Vec<Table> {
         }
 
         let mut body = Vec::new();
+        let mut row_links = Vec::new();
         for row in &rows[body_start..] {
             let cells: Vec<String> = row.select(&td_sel).map(|e| cell_text(e)).collect();
             if cells.is_empty() || cells.iter().all(|c| c.is_empty()) {
                 continue;
             }
             body.push(cells);
+            // Capture this row's statement-PDF link, if it has one. Scoped to the
+            // row so a link never binds to the wrong bill.
+            row_links.push(
+                row.select(&ebill_sel)
+                    .next()
+                    .and_then(|a| a.value().attr("href"))
+                    .map(|h| h.replace("&amp;", "&")),
+            );
         }
         if body.is_empty() {
             continue;
@@ -114,6 +128,7 @@ pub fn extract_tables(html: &str) -> Vec<Table> {
             id,
             headers,
             rows: body,
+            row_links,
         };
         // Drop DNN menu/layout/script tables so they can't masquerade as data.
         if !t.is_noise() {
@@ -207,7 +222,8 @@ pub fn parse_bills(html: &str) -> Vec<Bill> {
     table
         .rows
         .iter()
-        .map(|row| {
+        .enumerate()
+        .map(|(i, row)| {
             let get = |i: Option<usize>| i.and_then(|i| row.get(i)).cloned();
             Bill {
                 date: get(c_date).unwrap_or_default(),
@@ -215,6 +231,9 @@ pub fn parse_bills(html: &str) -> Vec<Bill> {
                 balance: get(c_balance).as_deref().and_then(Money::parse),
                 due_date: get(c_due),
                 document_id: None,
+                // Per-row eBill link (aligned 1:1 with rows); only some bills
+                // expose a downloadable statement.
+                document_url: table.row_links.get(i).cloned().flatten(),
                 extra: build_extra(&table.headers, row, &[c_date, c_amount, c_balance, c_due]),
             }
         })
@@ -504,6 +523,28 @@ mod tests {
         assert_eq!(usage[0].quantity, Some(3120.0));
         assert_eq!(usage[0].unit.as_deref(), Some("gallons"));
         assert_eq!(usage[0].days, Some(30));
+    }
+
+    #[test]
+    fn bills_capture_ebill_pdf_url() {
+        let html = r#"<table id="BillingHistory_GridView1">
+            <tr><th>Bill Date</th><th>Bill Total</th><th>Web Bill</th></tr>
+            <tr>
+              <td><a href="javascript:__doPostBack('x','')">06/16/2026</a></td>
+              <td>$84.21</td>
+              <td><a href="https://utilitybill.jupiter.fl.us/BillingHistory.aspx?mid=1&amp;ctl=VieweBill&amp;BH=abc">View</a></td>
+            </tr>
+        </table>"#;
+        let bills = parse_bills(html);
+        assert_eq!(bills.len(), 1);
+        assert_eq!(bills[0].date, "06/16/2026");
+        // The eBill URL is captured (entities decoded), the postback link ignored.
+        assert_eq!(
+            bills[0].document_url.as_deref(),
+            Some(
+                "https://utilitybill.jupiter.fl.us/BillingHistory.aspx?mid=1&ctl=VieweBill&BH=abc"
+            )
+        );
     }
 
     #[test]
