@@ -1,10 +1,10 @@
-name: Release
+name: release
 
-# Cut a release by pushing a tag, e.g.:  git tag v0.1.0 && git push origin v0.1.0
-# This builds per-platform binaries and attaches them to the GitHub Release, so
-# `tojfl self-update` has assets to pull. Asset names embed the Rust target
-# triple, which is what the self_update client matches on.
-
+# Cut a release by pushing a tag like `v0.1.0`. One Linux job and ONE macOS
+# job (Apple Silicon, which cross-compiles the Intel target — the macOS SDK is
+# universal). Jobs are independent (fail-fast: false) and each attaches its own
+# assets, so a slow or dead macOS queue can never block the Linux assets and
+# only one macOS runner is ever needed.
 on:
   push:
     tags: ["v*"]
@@ -14,40 +14,35 @@ permissions:
 
 jobs:
   build:
-    name: ${{ matrix.target }}
+    name: build ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: macos-14
-            target: aarch64-apple-darwin
-          # Cross-compile the Intel-mac binary on the Apple-Silicon runner (the
-          # macOS SDK is universal). Avoids the frequently-backed-up macos-13
-          # queue that left v0.2.0 without an x86_64-apple-darwin asset.
-          - os: macos-14
-            target: x86_64-apple-darwin
+            name: apple (aarch64 + x86_64)
+            targets: "aarch64-apple-darwin x86_64-apple-darwin"
           - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
+            name: linux x86_64
+            targets: "x86_64-unknown-linux-gnu"
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Rust
-        run: |
-          rustup update stable
-          rustup target add ${{ matrix.target }}
-
-      - name: Install Linux TLS deps
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux build deps
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev libdbus-1-dev
-
-      - name: Build
-        run: cargo build --release -p tojfl-cli --target ${{ matrix.target }}
-
-      - name: Package
-        run: tar czf tojfl-${{ github.ref_name }}-${{ matrix.target }}.tar.gz -C target/${{ matrix.target }}/release tojfl
-
-      - name: Attach to release
+      - name: Build and package each target
+        run: |
+          for t in ${{ matrix.targets }}; do
+            rustup target add "$t"
+            cargo build --release -p tojfl-cli --target "$t"
+            tar -C "target/$t/release" -czf "tojfl-${{ github.ref_name }}-$t.tar.gz" tojfl
+            shasum -a 256 "tojfl-${{ github.ref_name }}-$t.tar.gz" > "tojfl-${{ github.ref_name }}-$t.tar.gz.sha256"
+          done
+      - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
-          files: tojfl-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
+          files: |
+            tojfl-${{ github.ref_name }}-*.tar.gz
+            tojfl-${{ github.ref_name }}-*.tar.gz.sha256
