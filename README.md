@@ -99,7 +99,8 @@ Add `--json` to any command for machine-readable output, `-v` for diagnostics.
 If several utility accounts are linked to your login, `tojfl account list` shows
 them all. Target a specific one with the global `--account <ACCOUNT#>` flag —
 it activates that account for the session before the command runs, so
-`account show`, `bills`, `usage`, and `transactions` all report that account:
+`account show`, `bills`, `usage`, `transactions`, and `ebill status` all report
+that account:
 
 ```bash
 tojfl account list

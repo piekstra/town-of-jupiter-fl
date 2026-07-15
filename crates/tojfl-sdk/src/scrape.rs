@@ -477,9 +477,18 @@ pub fn parse_autopay(html: &str) -> (Option<String>, Option<String>, Option<Mone
 /// account's "eBill Registration Date" cell is populated.
 pub fn parse_ebill(html: &str, account: &str) -> (Option<bool>, Option<String>) {
     let tables = extract_tables(html);
-    // The eBill grid's id is `…gvAccounts`, which isn't a "GridView", so match it
-    // by its distinctive headers rather than by id.
-    let table = match best_table(&tables, &["ebill registration", "register for", "email"]) {
+    // The eBill grid's id ends in `…gvAccounts`, which isn't a "GridView" — match
+    // it by id first (so another GridView on the page can't be picked instead),
+    // then fall back to its distinctive headers.
+    let table = tables
+        .iter()
+        .find(|t| {
+            t.id.as_deref()
+                .map(|id| id.to_lowercase().ends_with("gvaccounts"))
+                .unwrap_or(false)
+        })
+        .or_else(|| best_table(&tables, &["ebill registration", "register for", "email"]));
+    let table = match table {
         Some(t) => t,
         None => return (None, None),
     };
@@ -705,6 +714,15 @@ mod tests {
             bills[1].document_url.is_none(),
             "row without a link must not carry a (mis-aligned) URL"
         );
+    }
+
+    #[test]
+    fn reads_account_number_from_page() {
+        assert_eq!(
+            account_number_from_page(r#"<span id="mod_lblAcctNum">123456</span>"#),
+            Some("123456".to_string())
+        );
+        assert_eq!(account_number_from_page("<html></html>"), None);
     }
 
     #[test]
