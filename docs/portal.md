@@ -124,6 +124,8 @@ columns by header keywords:
 - **Bills:** date / amount / balance / due date
 - **Usage:** period / usage (unit sniffed from the header: gallons, kgal, CCF…) /
   days / average
+- **Meters:** date / meter # / previous read / current read / days / type /
+  consumption / average
 - **Transactions:** date / description / amount (credits parenthesized) / balance
 - **Profile:** DNN label→value pairs, matched by id suffix
 

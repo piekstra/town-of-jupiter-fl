@@ -164,8 +164,11 @@ degrees:
   forms-auth postback), **account summary** (balance, due date, account
   number), **billing history** (incl. downloading a statement PDF via the grid's
   eBill link), **transaction history**, **usage** (service-selection form →
-  consumption grid; plus `--against` street/region/city comparison), **multi-
-  account** (`account list` + `--account` switching), and **`ebill status`**
+  consumption grid; plus `--against` street/region/city comparison), **meter
+  reads** (`MeterReadingHistory.aspx` service-selection form → reads grid: 4
+  reads returned with previous/current read, days, type, and consumption),
+  **multi-account** (`account list` + `--account` switching), and **`ebill
+  status`**
   (paperless + autopay enrollment, incl. the autopay plan/draw). These read the
   eCARE ASP.NET GridViews directly; unrecognized columns are preserved in an
   `extra` map so nothing is dropped.

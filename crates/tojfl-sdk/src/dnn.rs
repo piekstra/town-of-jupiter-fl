@@ -260,4 +260,28 @@ mod tests {
             Some("dnn_ctr1216_Login_Login_DNN_cmdLogin")
         );
     }
+
+    #[test]
+    fn first_real_option_skips_placeholder() {
+        // The meter-reads service dropdown leads with a "Select Service Type"
+        // placeholder that submits an empty grid; we must skip past it.
+        let html = r#"
+            <select name="dnn$ctr123$Meters$ctlServices">
+                <option value="">Select Service Type .....</option>
+                <option value="30">Water</option>
+            </select>"#;
+        assert_eq!(
+            first_real_option(html, "ctlServices").as_deref(),
+            Some("30")
+        );
+    }
+
+    #[test]
+    fn first_real_option_returns_none_when_only_placeholder() {
+        let html = r#"
+            <select name="dnn$ctr123$Meters$ctlServices">
+                <option value="">Select Service Type .....</option>
+            </select>"#;
+        assert!(first_real_option(html, "ctlServices").is_none());
+    }
 }
