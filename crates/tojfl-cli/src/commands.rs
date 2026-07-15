@@ -273,7 +273,13 @@ pub fn bills(ctx: &Ctx, cmd: &BillsCmd) -> Result<()> {
     let mut items = items;
     match cmd {
         BillsCmd::Latest => items.truncate(1),
-        BillsCmd::List { limit } => {
+        BillsCmd::List {
+            limit,
+            since,
+            until,
+        } => {
+            let (since, until) = date_bounds(since, until)?;
+            items.retain(|b| tojfl_sdk::date::in_range(&b.date, since, until));
             if let Some(n) = limit {
                 items.truncate(*n);
             }
@@ -387,8 +393,14 @@ pub fn usage(ctx: &Ctx, cmd: &UsageCmd) -> Result<()> {
             let items = portal.usage()?;
             usage_compare(ctx, &items)
         }
-        UsageCmd::List { limit } => {
+        UsageCmd::List {
+            limit,
+            since,
+            until,
+        } => {
             let mut items = portal.usage()?;
+            let (since, until) = date_bounds(since, until)?;
+            items.retain(|u| tojfl_sdk::date::in_range(&u.period, since, until));
             if let Some(n) = limit {
                 items.truncate(*n);
             }
@@ -502,9 +514,16 @@ fn usage_compare_group(ctx: &Ctx, portal: &Portal, group: CompareAgainst) -> Res
 
 // --- meters ---------------------------------------------------------------
 
-pub fn meters(ctx: &Ctx, limit: Option<usize>) -> Result<()> {
+pub fn meters(
+    ctx: &Ctx,
+    limit: Option<usize>,
+    since: &Option<String>,
+    until: &Option<String>,
+) -> Result<()> {
     let portal = ctx.portal()?;
     let mut reads = portal.meter_reads()?;
+    let (since, until) = date_bounds(since, until)?;
+    reads.retain(|r| tojfl_sdk::date::in_range(&r.date, since, until));
     if let Some(n) = limit {
         reads.truncate(n);
     }
@@ -539,7 +558,13 @@ pub fn meters(ctx: &Ctx, limit: Option<usize>) -> Result<()> {
 pub fn transactions(ctx: &Ctx, cmd: &TransactionsCmd) -> Result<()> {
     let portal = ctx.portal()?;
     let mut items = portal.transactions()?;
-    let TransactionsCmd::List { limit } = cmd;
+    let TransactionsCmd::List {
+        limit,
+        since,
+        until,
+    } = cmd;
+    let (since, until) = date_bounds(since, until)?;
+    items.retain(|t| tojfl_sdk::date::in_range(&t.date, since, until));
     if let Some(n) = limit {
         items.truncate(*n);
     }
@@ -856,5 +881,27 @@ fn tri_state(b: Option<bool>) -> &'static str {
         Some(true) => "enrolled",
         Some(false) => "not enrolled",
         None => "unknown",
+    }
+}
+
+/// Resolve a `--since`/`--until` pair into comparable dates for history
+/// filtering, reporting an unparseable value as a usage error (so it exits with
+/// the family's usage-error code rather than a generic failure).
+fn date_bounds(
+    since: &Option<String>,
+    until: &Option<String>,
+) -> Result<(Option<tojfl_sdk::date::Ymd>, Option<tojfl_sdk::date::Ymd>)> {
+    Ok((date_bound(since, "since")?, date_bound(until, "until")?))
+}
+
+fn date_bound(value: &Option<String>, flag: &str) -> Result<Option<tojfl_sdk::date::Ymd>> {
+    match value {
+        None => Ok(None),
+        Some(v) => tojfl_sdk::date::parse(v).map(Some).ok_or_else(|| {
+            tojfl_sdk::Error::Invalid(format!(
+                "invalid --{flag} date '{v}' (use YYYY-MM-DD, MM/DD/YYYY, or 'Mon DD, YYYY')"
+            ))
+            .into()
+        }),
     }
 }

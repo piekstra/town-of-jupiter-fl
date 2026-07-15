@@ -131,6 +131,11 @@ columns by header keywords:
 
 Unrecognized columns are preserved verbatim in each record's `extra` map.
 
+The portal exposes no server-side date query, so `--since`/`--until` filtering is
+client-side (`date.rs`): the grids render dates as `MM/DD/YYYY` (bills) or
+`Mon DD, YYYY` (transactions, usage, meters), both parsed into a comparable
+`(y, m, d)` triple. Rows whose date can't be parsed are kept, never dropped.
+
 ## Contact
 
 Town of Jupiter Utilities — customer service **(561) 741-2300**.

@@ -22,6 +22,7 @@ pub mod accounts;
 pub mod auth;
 pub mod client;
 pub mod config;
+pub mod date;
 pub mod dnn;
 pub mod error;
 pub mod model;
