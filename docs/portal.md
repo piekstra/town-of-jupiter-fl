@@ -23,10 +23,12 @@ scrapers. Everything here is observable from the public, unauthenticated pages.
 | `/SecurePasswordRecovery.aspx` | public | Password recovery |
 | `/ContactUs.aspx` | public | Contact info |
 | `/OnlinePayment.aspx` | public | One-time payment lookup (customer + account) |
+| `/ListAccounts.aspx` | auth | Accounts linked to the login (list + switch) |
 | `/BillingHistory.aspx` | auth | Statements |
 | `/UsageHistory.aspx` | auth | Metered consumption |
 | `/TransactionHistory.aspx` | auth | Ledger |
-| `/UserProfile.aspx` | auth | Account holder profile |
+| `/UserProfile.aspx` | auth | Message inbox (NOT the profile fields) |
+| `/ChangeProfile.aspx` | auth | Profile fields (DNN ManageUsers) |
 
 Unauthenticated requests to the `auth` pages 302 to
 `/Login/tabid/400/Default.aspx?returnurl=…`; nonexistent pages 302 to
