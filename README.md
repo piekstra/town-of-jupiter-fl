@@ -99,7 +99,8 @@ Add `--json` to any command for machine-readable output, `-v` for diagnostics.
 If several utility accounts are linked to your login, `tojfl account list` shows
 them all. Target a specific one with the global `--account <ACCOUNT#>` flag —
 it activates that account for the session before the command runs, so
-`account show`, `bills`, `usage`, and `transactions` all report that account:
+`account show`, `bills`, `usage`, `transactions`, and `ebill status` all report
+that account:
 
 ```bash
 tojfl account list
@@ -159,16 +160,18 @@ degrees:
 - **Validated end-to-end against a real logged-in account:** login (the DNN
   forms-auth postback), **account summary** (balance, due date, account
   number), **billing history** (incl. downloading a statement PDF via the grid's
-  eBill link), **transaction history**, and **usage** (which submits the
-  `UsageHistory.aspx` service-selection form, then reads the consumption grid —
-  period, quantity, and unit). These read the eCARE ASP.NET GridViews directly;
-  unrecognized columns are preserved in an `extra` map so nothing is dropped.
+  eBill link), **transaction history**, **usage** (service-selection form →
+  consumption grid; plus `--against` street/region/city comparison), **multi-
+  account** (`account list` + `--account` switching), and **`ebill status`**
+  (paperless + autopay enrollment, incl. the autopay plan/draw). These read the
+  eCARE ASP.NET GridViews directly; unrecognized columns are preserved in an
+  `extra` map so nothing is dropped.
 - **Fully exercised against the live site (public paths):** the login-form
   contract and the one-time-payment lookup (`OnlinePayment.aspx`).
-- **Partial:** `profile` / `ebill` target the correct page (`ChangeProfile.aspx`,
+- **Partial:** `profile` targets the correct page (`ChangeProfile.aspx`,
   DNN's ManageUsers module) but its default view is the password/security form;
   the name/email profile fields load behind a "Manage Profile" tab (a further
-  postback) that isn't wired up yet, so these can return empty. The parser
+  postback) that isn't wired up yet, so it can return empty. The parser
   deliberately extracts only known profile properties — it never surfaces the
   password or security-question fields on that page.
 
