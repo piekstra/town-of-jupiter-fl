@@ -8,7 +8,8 @@ pub use pk_cli_selfupdate::SelfUpdateArgs;
 ///
 /// View account and billing info, review usage, list transactions, and drive
 /// the one-time payment lookup. Credentials come from `--username`/env/keychain
-/// — never hard-coded. Add `--json` to any command for machine-readable output.
+/// — never hard-coded. Add `--json` or `--csv` to any command for
+/// machine-readable output.
 #[derive(Debug, Parser)]
 #[command(name = "tojfl", version, about, long_about = None, propagate_version = true)]
 pub struct Cli {
@@ -24,6 +25,10 @@ pub struct GlobalOpts {
     /// Emit JSON instead of formatted tables.
     #[arg(long, global = true)]
     pub json: bool,
+
+    /// Emit CSV instead of formatted tables (row commands + single-record views).
+    #[arg(long, global = true, conflicts_with = "json")]
+    pub csv: bool,
 
     /// Operate on this account number (overrides config default).
     #[arg(long, global = true, value_name = "ACCOUNT")]
