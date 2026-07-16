@@ -32,6 +32,7 @@ pub mod scrape;
 pub mod session;
 pub mod usage;
 
+use std::cell::RefCell;
 use std::time::Duration;
 
 pub use error::{Error, Result};
@@ -49,7 +50,9 @@ use session::Session;
 pub struct Portal {
     client: Client,
     base_url: String,
-    username: Option<String>,
+    /// Cached display username. Behind a `RefCell` so a silent `&self` session
+    /// refresh can update it if it re-authenticates as a different user.
+    username: RefCell<Option<String>>,
     /// Whether a saved session was loaded (cookies seeded) for this base URL.
     /// A cheap, reliable gate: with no session we are definitely logged out,
     /// so we can reject authenticated calls without a network round-trip (and
@@ -58,6 +61,17 @@ pub struct Portal {
     /// Account to activate before account-scoped reads (from `--account` /
     /// config `default_account`). `None` uses whatever account is active.
     active_account: Option<String>,
+    /// The config this handle was built from — kept so an expired session can
+    /// be silently re-authenticated from stored credentials.
+    cfg: Config,
+}
+
+/// Whether an expired/absent session should be silently refreshed: only when a
+/// session previously existed (so a deliberate `logout` stays logged out) and
+/// auto-login hasn't been disabled in config. Credential availability is checked
+/// separately at refresh time.
+fn should_refresh(has_session: bool, auto_login: Option<bool>) -> bool {
+    has_session && auto_login.unwrap_or(true)
 }
 
 impl Portal {
@@ -83,9 +97,10 @@ impl Portal {
         Ok(Portal {
             client,
             base_url,
-            username,
+            username: RefCell::new(username),
             has_session,
             active_account: cfg.default_account.clone(),
+            cfg: cfg.clone(),
         })
     }
 
@@ -95,8 +110,8 @@ impl Portal {
     }
 
     /// The username associated with the current session/config, if any.
-    pub fn username(&self) -> Option<&str> {
-        self.username.as_deref()
+    pub fn username(&self) -> Option<String> {
+        self.username.borrow().clone()
     }
 
     // --- authentication ---------------------------------------------------
@@ -104,7 +119,7 @@ impl Portal {
     /// Log in and persist the session. Returns the saved-session path.
     pub fn login(&mut self, username: &str, password: &str) -> Result<std::path::PathBuf> {
         auth::login(&self.client, username, password)?;
-        self.username = Some(username.to_string());
+        *self.username.borrow_mut() = Some(username.to_string());
         self.has_session = true;
         let sess = Session {
             cookies: self.client.snapshot_cookies(),
@@ -133,10 +148,41 @@ impl Portal {
 
     fn ensure_authenticated(&self) -> Result<()> {
         if self.is_authenticated()? {
-            Ok(())
-        } else {
-            Err(Error::NotAuthenticated)
+            return Ok(());
         }
+        // Session absent or expired: try a silent re-login from stored
+        // credentials so long-lived callers (dashboards, cron) keep working
+        // across the portal's short session timeout.
+        if self.refresh_session()? {
+            return Ok(());
+        }
+        Err(Error::NotAuthenticated)
+    }
+
+    /// Attempt to silently re-establish a session using stored credentials.
+    /// Returns `Ok(true)` if a fresh session is now in place. Does nothing (and
+    /// returns `Ok(false)`) when auto-login is disabled, no prior session
+    /// existed, or no credentials are available to authenticate with.
+    fn refresh_session(&self) -> Result<bool> {
+        if !should_refresh(self.has_session, self.cfg.auto_login) {
+            return Ok(false);
+        }
+        let creds = match config::credentials(&self.cfg, None, None) {
+            Ok(c) => c,
+            Err(_) => return Ok(false), // nothing stored to re-authenticate with
+        };
+        auth::login(&self.client, &creds.username, &creds.password)?;
+        // Reflect the refreshed identity so `username()` doesn't go stale.
+        *self.username.borrow_mut() = Some(creds.username.clone());
+        // Persist the refreshed cookies so the next process starts authenticated.
+        let sess = Session {
+            cookies: self.client.snapshot_cookies(),
+            base_url: self.base_url.clone(),
+            username: Some(creds.username),
+            saved_at: Session::now(),
+        };
+        let _ = sess.save();
+        Ok(true)
     }
 
     /// Gate for account-scoped reads: require a session, then activate the
@@ -315,5 +361,27 @@ impl Portal {
     /// Static contact / service information (no network call).
     pub fn contact(&self) -> Contact {
         Contact::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_refresh;
+
+    #[test]
+    fn refresh_gate_respects_session_and_toggle() {
+        // Default (None) is enabled, but only with a prior session.
+        assert!(
+            should_refresh(true, None),
+            "expired session refreshes by default"
+        );
+        assert!(
+            !should_refresh(false, None),
+            "no prior session (e.g. after logout) must not auto-login"
+        );
+        // Explicit opt-out wins even with a session present.
+        assert!(!should_refresh(true, Some(false)));
+        assert!(should_refresh(true, Some(true)));
+        assert!(!should_refresh(false, Some(true)));
     }
 }
