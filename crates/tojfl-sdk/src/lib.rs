@@ -38,7 +38,7 @@ use std::time::Duration;
 pub use error::{Error, Result};
 pub use model::{
     Account, Bill, Contact, Enrollment, LinkedAccount, MeterRead, Money, PaymentQuote, Profile,
-    ServiceInfo, Summary, Transaction, UsageComparison, UsageRecord,
+    ServiceInfo, Summary, Transaction, UsageComparison, UsageRecord, UsageStats,
 };
 pub use usage::CompareTarget;
 

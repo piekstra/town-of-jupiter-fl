@@ -393,6 +393,7 @@ pub fn usage(ctx: &Ctx, cmd: &UsageCmd) -> Result<()> {
             let items = portal.usage()?;
             usage_compare(ctx, &items)
         }
+        UsageCmd::Stats { since, until } => usage_stats(ctx, &portal, since, until),
         UsageCmd::List {
             limit,
             since,
@@ -474,6 +475,47 @@ fn usage_compare(ctx: &Ctx, items: &[tojfl_sdk::UsageRecord]) -> Result<()> {
         ctx.fmt
             .print_table(&["Period", "Usage", "Δ vs prior", "Δ %"], &rows);
     }
+    Ok(())
+}
+
+fn usage_stats(
+    ctx: &Ctx,
+    portal: &Portal,
+    since: &Option<String>,
+    until: &Option<String>,
+) -> Result<()> {
+    let mut items = portal.usage()?;
+    let (since, until) = date_bounds(since, until)?;
+    items.retain(|u| tojfl_sdk::date::in_range(&u.period, since, until));
+
+    let stats = tojfl_sdk::UsageStats::from_records(&items);
+    if ctx.fmt.json {
+        // Emit an object (or `null` for no data) — stable shape for scripts.
+        ctx.fmt.print_json(&stats)?;
+        return Ok(());
+    }
+    let Some(s) = stats else {
+        println!("(no usage with a numeric quantity in range)");
+        return Ok(());
+    };
+    let unit = s.unit.as_deref().unwrap_or("");
+    let with_unit = |n: f64| {
+        if unit.is_empty() {
+            fmt_num(n)
+        } else {
+            format!("{} {unit}", fmt_num(n))
+        }
+    };
+    ctx.fmt.print_kv(
+        "Usage Statistics",
+        &[
+            ("Periods", s.periods.to_string()),
+            ("Total", with_unit(s.total)),
+            ("Average", with_unit(s.average)),
+            ("Min", format!("{} ({})", with_unit(s.min), s.min_period)),
+            ("Max", format!("{} ({})", with_unit(s.max), s.max_period)),
+        ],
+    );
     Ok(())
 }
 

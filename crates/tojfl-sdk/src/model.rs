@@ -219,6 +219,67 @@ pub struct UsageRecord {
     pub extra: std::collections::BTreeMap<String, String>,
 }
 
+/// Summary statistics over a set of [`UsageRecord`]s (the periods that carry a
+/// parseable quantity). `None` from [`UsageStats::from_records`] means no period
+/// had a usable number.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UsageStats {
+    /// How many periods contributed a quantity.
+    pub periods: usize,
+    /// Unit of measure, taken from the records (e.g. "100 Gallons"), if shown.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unit: Option<String>,
+    /// Sum of consumption across the periods.
+    pub total: f64,
+    /// Mean consumption per period.
+    pub average: f64,
+    /// Lowest single-period consumption, and the period it occurred in.
+    pub min: f64,
+    pub min_period: String,
+    /// Highest single-period consumption, and the period it occurred in.
+    pub max: f64,
+    pub max_period: String,
+}
+
+impl UsageStats {
+    /// Compute stats over the records that carry a quantity. Returns `None` when
+    /// none do (so callers can report "no data" rather than a bogus zero-row).
+    pub fn from_records(records: &[UsageRecord]) -> Option<UsageStats> {
+        let mut periods = 0usize;
+        let mut total = 0.0;
+        let mut unit = None;
+        let mut min = (f64::INFINITY, String::new());
+        let mut max = (f64::NEG_INFINITY, String::new());
+        for r in records {
+            let Some(q) = r.quantity else { continue };
+            periods += 1;
+            total += q;
+            if unit.is_none() {
+                unit = r.unit.clone();
+            }
+            if q < min.0 {
+                min = (q, r.period.clone());
+            }
+            if q > max.0 {
+                max = (q, r.period.clone());
+            }
+        }
+        if periods == 0 {
+            return None;
+        }
+        Some(UsageStats {
+            periods,
+            unit,
+            total,
+            average: total / periods as f64,
+            min: min.0,
+            min_period: min.1,
+            max: max.0,
+            max_period: max.1,
+        })
+    }
+}
+
 /// One period comparing your consumption to a group average (street/region/city).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UsageComparison {
@@ -346,6 +407,53 @@ impl Default for Contact {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn usage(period: &str, quantity: Option<f64>, unit: Option<&str>) -> UsageRecord {
+        UsageRecord {
+            period: period.into(),
+            quantity,
+            unit: unit.map(Into::into),
+            days: None,
+            average_per_day: None,
+            extra: Default::default(),
+        }
+    }
+
+    #[test]
+    fn usage_stats_aggregates_periods() {
+        let records = vec![
+            usage("Apr 2026", Some(6.4), Some("100 Gallons")),
+            usage("May 2026", Some(11.8), Some("100 Gallons")),
+            usage("Jun 2026", Some(9.9), Some("100 Gallons")),
+        ];
+        let s = UsageStats::from_records(&records).expect("has data");
+        assert_eq!(s.periods, 3);
+        assert_eq!(s.unit.as_deref(), Some("100 Gallons"));
+        assert!((s.total - 28.1).abs() < 1e-9);
+        assert!((s.average - 28.1 / 3.0).abs() < 1e-9);
+        assert_eq!((s.min, s.min_period.as_str()), (6.4, "Apr 2026"));
+        assert_eq!((s.max, s.max_period.as_str()), (11.8, "May 2026"));
+    }
+
+    #[test]
+    fn usage_stats_skips_periods_without_a_quantity() {
+        // Rows lacking a parseable quantity don't count toward periods/total.
+        let records = vec![
+            usage("Apr 2026", None, None),
+            usage("May 2026", Some(5.0), Some("kgal")),
+        ];
+        let s = UsageStats::from_records(&records).expect("has one data row");
+        assert_eq!(s.periods, 1);
+        assert_eq!(s.total, 5.0);
+        assert_eq!(s.unit.as_deref(), Some("kgal"));
+    }
+
+    #[test]
+    fn usage_stats_is_none_when_no_quantities() {
+        let records = vec![usage("Apr 2026", None, None)];
+        assert!(UsageStats::from_records(&records).is_none());
+        assert!(UsageStats::from_records(&[]).is_none());
+    }
 
     #[test]
     fn money_parses_plain() {
