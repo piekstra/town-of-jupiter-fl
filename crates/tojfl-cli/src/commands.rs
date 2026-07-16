@@ -4,7 +4,7 @@
 use crate::cli::*;
 use crate::output::{opt, Format};
 use anyhow::{anyhow, Context, Result};
-use std::io::Read;
+use std::io::{IsTerminal, Read};
 use tojfl_sdk::{config, CompareTarget, Config, Portal};
 
 /// Shared context threaded through handlers.
@@ -831,6 +831,14 @@ fn resolve_password(args: &LoginArgs) -> Result<String> {
         let mut buf = String::new();
         std::io::stdin().read_to_string(&mut buf)?;
         return Ok(buf.trim_end_matches(['\n', '\r']).to_string());
+    }
+    // Non-interactive callers (cron, a dashboard) have no TTY to prompt at, so
+    // fall back to a stored keychain password. Interactive users still get the
+    // prompt, so they can enter a new password (e.g. after a portal change).
+    if !std::io::stdin().is_terminal() {
+        if let Ok(Some(pw)) = config::keychain_get() {
+            return Ok(pw);
+        }
     }
     prompt_password("Portal password: ")
 }

@@ -68,6 +68,18 @@ to the OS keychain (macOS Keychain / Windows Credential Manager / Secret
 Service). Nothing sensitive is written into this repository — see
 [Privacy & security](#privacy--security).
 
+Once credentials are saved, **sessions refresh themselves**: the portal expires
+its login cookie after a short idle period, so when a command finds the cached
+session stale, tojfl silently re-authenticates from the stored credentials and
+continues. Long-lived callers (dashboards, cron) keep working without a manual
+`auth login`. This only ever re-establishes a session you already had — after
+`tojfl auth logout` you stay logged out. Set `auto_login = false` in the config
+to disable it and require an explicit login after each expiry.
+
+For non-interactive login (no TTY to prompt at), `tojfl auth login` reads the
+password from the keychain if present; pipe one explicitly with
+`--password-stdin` (e.g. `op read … | tojfl auth login --password-stdin --save`).
+
 ## Commands
 
 | Command | What it does |

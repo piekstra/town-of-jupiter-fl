@@ -33,6 +33,12 @@ pub struct Config {
     /// HTTP timeout in seconds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timeout_secs: Option<u64>,
+    /// Silently re-authenticate an expired session from stored credentials
+    /// (keychain/env/config) instead of erroring. Defaults to enabled; set
+    /// `false` to require an explicit `tojfl auth login` after a session ages
+    /// out (e.g. for tighter control on shared machines).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_login: Option<bool>,
 }
 
 impl Config {

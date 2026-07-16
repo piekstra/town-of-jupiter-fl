@@ -58,6 +58,17 @@ pub struct Portal {
     /// Account to activate before account-scoped reads (from `--account` /
     /// config `default_account`). `None` uses whatever account is active.
     active_account: Option<String>,
+    /// The config this handle was built from — kept so an expired session can
+    /// be silently re-authenticated from stored credentials.
+    cfg: Config,
+}
+
+/// Whether an expired/absent session should be silently refreshed: only when a
+/// session previously existed (so a deliberate `logout` stays logged out) and
+/// auto-login hasn't been disabled in config. Credential availability is checked
+/// separately at refresh time.
+fn should_refresh(has_session: bool, auto_login: Option<bool>) -> bool {
+    has_session && auto_login.unwrap_or(true)
 }
 
 impl Portal {
@@ -86,6 +97,7 @@ impl Portal {
             username,
             has_session,
             active_account: cfg.default_account.clone(),
+            cfg: cfg.clone(),
         })
     }
 
@@ -133,10 +145,39 @@ impl Portal {
 
     fn ensure_authenticated(&self) -> Result<()> {
         if self.is_authenticated()? {
-            Ok(())
-        } else {
-            Err(Error::NotAuthenticated)
+            return Ok(());
         }
+        // Session absent or expired: try a silent re-login from stored
+        // credentials so long-lived callers (dashboards, cron) keep working
+        // across the portal's short session timeout.
+        if self.refresh_session()? {
+            return Ok(());
+        }
+        Err(Error::NotAuthenticated)
+    }
+
+    /// Attempt to silently re-establish a session using stored credentials.
+    /// Returns `Ok(true)` if a fresh session is now in place. Does nothing (and
+    /// returns `Ok(false)`) when auto-login is disabled, no prior session
+    /// existed, or no credentials are available to authenticate with.
+    fn refresh_session(&self) -> Result<bool> {
+        if !should_refresh(self.has_session, self.cfg.auto_login) {
+            return Ok(false);
+        }
+        let creds = match config::credentials(&self.cfg, None, None) {
+            Ok(c) => c,
+            Err(_) => return Ok(false), // nothing stored to re-authenticate with
+        };
+        auth::login(&self.client, &creds.username, &creds.password)?;
+        // Persist the refreshed cookies so the next process starts authenticated.
+        let sess = Session {
+            cookies: self.client.snapshot_cookies(),
+            base_url: self.base_url.clone(),
+            username: Some(creds.username),
+            saved_at: Session::now(),
+        };
+        let _ = sess.save();
+        Ok(true)
     }
 
     /// Gate for account-scoped reads: require a session, then activate the
@@ -315,5 +356,27 @@ impl Portal {
     /// Static contact / service information (no network call).
     pub fn contact(&self) -> Contact {
         Contact::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_refresh;
+
+    #[test]
+    fn refresh_gate_respects_session_and_toggle() {
+        // Default (None) is enabled, but only with a prior session.
+        assert!(
+            should_refresh(true, None),
+            "expired session refreshes by default"
+        );
+        assert!(
+            !should_refresh(false, None),
+            "no prior session (e.g. after logout) must not auto-login"
+        );
+        // Explicit opt-out wins even with a session present.
+        assert!(!should_refresh(true, Some(false)));
+        assert!(should_refresh(true, Some(true)));
+        assert!(!should_refresh(false, Some(true)));
     }
 }
