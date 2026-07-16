@@ -219,6 +219,15 @@ pub enum UsageCmd {
         #[arg(long, value_enum, value_name = "GROUP")]
         against: Option<CompareAgainst>,
     },
+    /// Summary statistics over usage history (total, average, min/max period).
+    Stats {
+        /// Only include periods on or after this date (YYYY-MM-DD, MM/DD/YYYY, or "Mon DD, YYYY").
+        #[arg(long, value_name = "DATE")]
+        since: Option<String>,
+        /// Only include periods on or before this date (YYYY-MM-DD, MM/DD/YYYY, or "Mon DD, YYYY").
+        #[arg(long, value_name = "DATE")]
+        until: Option<String>,
+    },
 }
 
 /// Group to compare consumption against (`usage compare --against`).

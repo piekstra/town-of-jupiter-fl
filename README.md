@@ -96,6 +96,7 @@ password from the keychain if present; pipe one explicitly with
 | `tojfl bills get <N> [-o FILE]` | Download a statement PDF (1 = most recent; `-o -` writes to stdout) |
 | `tojfl usage list [--limit N] [--since/--until DATE]` | Metered water usage per period |
 | `tojfl usage compare [--against street\|region\|city]` | Consumption change period-over-period, or vs. a street/region/city average |
+| `tojfl usage stats [--since/--until DATE]` | Summary over usage history: periods, total, average, min/max period |
 | `tojfl meters [--limit N] [--since/--until DATE]` | Meter reading history: date, meter #, previous/current read, days, type, usage |
 | `tojfl transactions list [--limit N] [--since/--until DATE]` | Ledger: charges, payments, adjustments |
 | `tojfl profile show` | Account holder profile |
