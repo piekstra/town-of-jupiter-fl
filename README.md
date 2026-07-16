@@ -79,13 +79,13 @@ Service). Nothing sensitive is written into this repository — see
 | `tojfl account show` | Account summary: account #, balance, due date (for the active account) |
 | `tojfl account list` | All accounts linked to your login (#, name, service address, balances) |
 | `tojfl balance` | Just the current balance due |
-| `tojfl bills list [--limit N]` | Billing history (statements); a `PDF` column shows which are downloadable |
+| `tojfl bills list [--limit N] [--since/--until DATE]` | Billing history (statements); a `PDF` column shows which are downloadable |
 | `tojfl bills latest` | Most recent statement |
 | `tojfl bills get <N> [-o FILE]` | Download a statement PDF (1 = most recent; `-o -` writes to stdout) |
-| `tojfl usage list [--limit N]` | Metered water usage per period |
+| `tojfl usage list [--limit N] [--since/--until DATE]` | Metered water usage per period |
 | `tojfl usage compare [--against street\|region\|city]` | Consumption change period-over-period, or vs. a street/region/city average |
-| `tojfl meters [--limit N]` | Meter reading history: date, meter #, previous/current read, days, type, usage |
-| `tojfl transactions list [--limit N]` | Ledger: charges, payments, adjustments |
+| `tojfl meters [--limit N] [--since/--until DATE]` | Meter reading history: date, meter #, previous/current read, days, type, usage |
+| `tojfl transactions list [--limit N] [--since/--until DATE]` | Ledger: charges, payments, adjustments |
 | `tojfl profile show` | Account holder profile |
 | `tojfl ebill status` | Paperless / autopay enrollment status |
 | `tojfl pay quote -c CUST -a ACCT` | Look up an account and report the amount due (no login) |
@@ -99,6 +99,16 @@ Add `--json` to any command for machine-readable output, or `--csv` for a
 spreadsheet-friendly sheet (row commands and single-record views alike); `-v`
 adds diagnostics. The default mode can also be set with `output = "json"` /
 `"csv"` in the config file.
+
+The history commands (`bills list`, `usage list`, `meters`, `transactions list`)
+accept `--since` / `--until` to bound the results by date — both inclusive, both
+optional, and applied before `--limit`. Dates accept `YYYY-MM-DD`, `MM/DD/YYYY`,
+or `Mon DD, YYYY`:
+
+```bash
+tojfl transactions list --since 2026-06-01           # this quarter's ledger
+tojfl bills list --since 2026-01-01 --until 2026-06-30 --csv > h1-bills.csv
+```
 
 ### Multiple accounts
 

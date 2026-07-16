@@ -88,6 +88,12 @@ pub enum Command {
         /// Only show the most recent N reads.
         #[arg(long, value_name = "N")]
         limit: Option<usize>,
+        /// Only include reads on or after this date (YYYY-MM-DD, MM/DD/YYYY, or "Mon DD, YYYY").
+        #[arg(long, value_name = "DATE")]
+        since: Option<String>,
+        /// Only include reads on or before this date (YYYY-MM-DD, MM/DD/YYYY, or "Mon DD, YYYY").
+        #[arg(long, value_name = "DATE")]
+        until: Option<String>,
     },
 
     /// Ledger transactions (charges, payments, adjustments).
@@ -169,6 +175,12 @@ pub enum BillsCmd {
         /// Only show the most recent N statements.
         #[arg(long, value_name = "N")]
         limit: Option<usize>,
+        /// Only include statements on or after this date (YYYY-MM-DD, MM/DD/YYYY, or "Mon DD, YYYY").
+        #[arg(long, value_name = "DATE")]
+        since: Option<String>,
+        /// Only include statements on or before this date (YYYY-MM-DD, MM/DD/YYYY, or "Mon DD, YYYY").
+        #[arg(long, value_name = "DATE")]
+        until: Option<String>,
     },
     /// Show just the most recent statement.
     Latest,
@@ -193,6 +205,12 @@ pub enum UsageCmd {
         /// Only show the most recent N periods.
         #[arg(long, value_name = "N")]
         limit: Option<usize>,
+        /// Only include periods on or after this date (YYYY-MM-DD, MM/DD/YYYY, or "Mon DD, YYYY").
+        #[arg(long, value_name = "DATE")]
+        since: Option<String>,
+        /// Only include periods on or before this date (YYYY-MM-DD, MM/DD/YYYY, or "Mon DD, YYYY").
+        #[arg(long, value_name = "DATE")]
+        until: Option<String>,
     },
     /// Compare consumption. Default: period-over-period. With `--against`,
     /// compares to a street/region/city average from the portal.
@@ -218,6 +236,12 @@ pub enum TransactionsCmd {
         /// Only show the most recent N transactions.
         #[arg(long, value_name = "N")]
         limit: Option<usize>,
+        /// Only include transactions on or after this date (YYYY-MM-DD, MM/DD/YYYY, or "Mon DD, YYYY").
+        #[arg(long, value_name = "DATE")]
+        since: Option<String>,
+        /// Only include transactions on or before this date (YYYY-MM-DD, MM/DD/YYYY, or "Mon DD, YYYY").
+        #[arg(long, value_name = "DATE")]
+        until: Option<String>,
     },
 }
 
