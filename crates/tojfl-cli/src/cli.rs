@@ -70,7 +70,11 @@ pub enum Command {
 
     /// One-call dashboard payload: balance, due/past-due, last payment, usage
     /// stats, and ledger totals (best with `--json`).
-    Snapshot,
+    Snapshot {
+        /// Snapshot every linked account instead of just the active one.
+        #[arg(long)]
+        all_accounts: bool,
+    },
 
     /// Show account summary and linked accounts.
     #[command(subcommand)]
