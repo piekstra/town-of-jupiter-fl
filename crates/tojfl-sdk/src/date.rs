@@ -88,6 +88,33 @@ fn valid(y: i32, m: u32, d: u32) -> Option<Ymd> {
     }
 }
 
+/// Today's date (UTC) as a comparable triple, from the system clock. Day
+/// granularity is all the callers need (e.g. an is-it-past-the-due-date check),
+/// so the UTC/local distinction — at most a day near midnight — doesn't matter.
+pub fn today() -> Ymd {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    civil_from_days(secs.div_euclid(86_400))
+}
+
+/// Convert a count of days since the Unix epoch into a civil `(y, m, d)` date.
+/// Howard Hinnant's well-known branch-free algorithm — no date-library needed.
+fn civil_from_days(z: i64) -> Ymd {
+    let z = z + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097; // [0, 146096]
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365; // [0, 399]
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100); // [0, 365]
+    let mp = (5 * doy + 2) / 153; // [0, 11]
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32; // [1, 31]
+    let m = if mp < 10 { mp + 3 } else { mp - 9 }; // [1, 12]
+    ((y + if m <= 2 { 1 } else { 0 }) as i32, m as u32, d)
+}
+
 /// Whether `date_str` falls within the inclusive `[since, until]` window (either
 /// bound optional). Dates that don't parse are **kept**: a range filter must
 /// never silently drop rows just because a deployment used an unfamiliar date
@@ -143,6 +170,21 @@ mod tests {
         assert!(in_range("Jun 15, 2026", since, until));
         assert!(!in_range("05/31/2026", since, until));
         assert!(!in_range("Jul 1, 2026", since, until));
+    }
+
+    #[test]
+    fn civil_from_days_matches_known_dates() {
+        assert_eq!(civil_from_days(0), (1970, 1, 1)); // Unix epoch
+        assert_eq!(civil_from_days(18262), (2020, 1, 1)); // a known leap year start
+        assert_eq!(civil_from_days(-1), (1969, 12, 31)); // before the epoch
+    }
+
+    #[test]
+    fn today_is_a_plausible_date() {
+        let (y, m, d) = today();
+        assert!((2025..2100).contains(&y), "year {y} out of range");
+        assert!((1..=12).contains(&m));
+        assert!((1..=31).contains(&d));
     }
 
     #[test]

@@ -68,6 +68,10 @@ pub enum Command {
     /// At-a-glance overview: balance, due, last read/bill/payment, enrollment.
     Summary,
 
+    /// One-call dashboard payload: balance, due/past-due, last payment, usage
+    /// stats, and ledger totals (best with `--json`).
+    Snapshot,
+
     /// Show account summary and linked accounts.
     #[command(subcommand)]
     Account(AccountCmd),

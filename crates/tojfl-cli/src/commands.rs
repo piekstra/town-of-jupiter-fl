@@ -124,6 +124,7 @@ pub fn info(_ctx: &Ctx) -> Result<()> {
         },
         &[
             "summary",
+            "snapshot",
             "account",
             "balance",
             "bills",
@@ -172,6 +173,50 @@ pub fn summary(ctx: &Ctx) -> Result<()> {
             ],
         );
     }
+    Ok(())
+}
+
+// --- snapshot -------------------------------------------------------------
+
+pub fn snapshot(ctx: &Ctx) -> Result<()> {
+    let portal = ctx.portal()?;
+    let s = portal.snapshot()?;
+    if ctx.fmt.json {
+        // The whole point is the nested object; emit it verbatim.
+        ctx.fmt.print_json(&s)?;
+        return Ok(());
+    }
+    // Table/CSV: flatten the nested usage/ledger into readable rows.
+    let last_payment = match (&s.last_payment_amount, &s.last_payment_date) {
+        (None, None) => "—".to_string(),
+        (a, d) => format!("{} on {}", opt(a), opt(d)),
+    };
+    let usage = match &s.usage {
+        Some(u) => format!(
+            "{} avg over {} periods{}",
+            fmt_num(u.average),
+            u.periods,
+            u.unit
+                .as_deref()
+                .map(|x| format!(" ({x})"))
+                .unwrap_or_default()
+        ),
+        None => "—".to_string(),
+    };
+    ctx.fmt.print_kv(
+        "Account Snapshot",
+        &[
+            ("Account #", opt(&s.account)),
+            ("Balance", opt(&s.balance)),
+            ("Due date", opt(&s.due_date)),
+            ("Past due", if s.past_due { "yes" } else { "no" }.into()),
+            ("Last payment", last_payment),
+            ("Usage", usage),
+            ("Ledger charges", s.ledger.charges.to_string()),
+            ("Ledger payments", s.ledger.payments.to_string()),
+            ("Ledger net", s.ledger.net.to_string()),
+        ],
+    );
     Ok(())
 }
 

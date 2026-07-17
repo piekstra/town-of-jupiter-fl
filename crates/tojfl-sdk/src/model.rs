@@ -112,6 +112,35 @@ pub struct Summary {
     pub enrollment: Enrollment,
 }
 
+/// A compact, machine-readable snapshot of the active account — everything a
+/// dashboard needs in one payload (balance, due/past-due, last payment, usage
+/// stats, and ledger totals). Built by `Portal::snapshot`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Snapshot {
+    /// Active account number, if known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
+    /// Current balance due.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub balance: Option<Money>,
+    /// Bill due date as text (formats vary; keep the portal's rendering).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub due_date: Option<String>,
+    /// Whether a balance is owed and the due date has already passed.
+    pub past_due: bool,
+    /// Most recent payment amount, if the portal shows one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_payment_amount: Option<Money>,
+    /// Most recent payment date, if shown.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_payment_date: Option<String>,
+    /// Consumption stats over the usage history (`None` if no numeric periods).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<UsageStats>,
+    /// Ledger totals (charges, payments/credits, net).
+    pub ledger: TransactionSummary,
+}
+
 /// Paperless (eBill) and autopay enrollment for the active account.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Enrollment {

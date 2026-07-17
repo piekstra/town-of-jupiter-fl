@@ -38,7 +38,7 @@ use std::time::Duration;
 pub use error::{Error, Result};
 pub use model::{
     Account, Bill, Contact, Enrollment, LinkedAccount, MeterRead, Money, PaymentQuote, Profile,
-    ServiceInfo, Summary, Transaction, TransactionSummary, UsageComparison, UsageRecord,
+    ServiceInfo, Snapshot, Summary, Transaction, TransactionSummary, UsageComparison, UsageRecord,
     UsageStats,
 };
 pub use usage::CompareTarget;
@@ -73,6 +73,18 @@ pub struct Portal {
 /// separately at refresh time.
 fn should_refresh(has_session: bool, auto_login: Option<bool>) -> bool {
     has_session && auto_login.unwrap_or(true)
+}
+
+/// Whether a balance is owed *and* the due date has already passed as of
+/// `today`. An unparseable/absent due date, or a zero/credit balance, is not
+/// past due.
+fn is_past_due(balance: Option<Money>, due_date: Option<&str>, today: date::Ymd) -> bool {
+    let owed = balance.map(|b| b.cents > 0).unwrap_or(false);
+    let overdue = due_date
+        .and_then(date::parse)
+        .map(|due| today > due)
+        .unwrap_or(false);
+    owed && overdue
 }
 
 impl Portal {
@@ -241,6 +253,26 @@ impl Portal {
         })
     }
 
+    /// A compact machine-readable snapshot for dashboards: balance, due/past-due,
+    /// last payment, usage stats, and ledger totals — one authenticated call.
+    pub fn snapshot(&self) -> Result<Snapshot> {
+        self.ready()?;
+        let account = self.fetch_account()?;
+        let service = self.fetch_service()?;
+        let usage_records = usage::fetch(&self.client)?;
+        let txns = scrape::parse_transactions(&self.client.get_text(pages::TRANSACTION_HISTORY)?);
+        Ok(Snapshot {
+            account: (!account.account_number.is_empty()).then(|| account.account_number.clone()),
+            past_due: is_past_due(account.balance, account.due_date.as_deref(), date::today()),
+            balance: account.balance,
+            due_date: account.due_date,
+            last_payment_amount: service.last_payment_amount,
+            last_payment_date: service.last_payment_date,
+            usage: UsageStats::from_records(&usage_records),
+            ledger: TransactionSummary::from_transactions(&txns),
+        })
+    }
+
     // Fetch helpers assume the caller already ran `ready()`, so `summary()` can
     // compose several without repeating the auth/account-activation round-trips.
     fn fetch_account(&self) -> Result<Account> {
@@ -367,7 +399,28 @@ impl Portal {
 
 #[cfg(test)]
 mod tests {
-    use super::should_refresh;
+    use super::{is_past_due, should_refresh};
+    use crate::model::Money;
+
+    #[test]
+    fn past_due_needs_both_a_balance_and_a_passed_due_date() {
+        let today = (2026, 7, 17);
+        let owed = Some(Money::from_cents(5676));
+        // Owed + due date already passed → past due.
+        assert!(is_past_due(owed, Some("6/1/2026"), today));
+        // Owed but due date is still in the future → not past due.
+        assert!(!is_past_due(owed, Some("8/5/2026"), today));
+        // Nothing owed → never past due, even with an old due date.
+        assert!(!is_past_due(Some(Money::ZERO), Some("6/1/2026"), today));
+        assert!(!is_past_due(
+            Some(Money::from_cents(-100)),
+            Some("6/1/2026"),
+            today
+        ));
+        // Missing/unparseable due date → not past due.
+        assert!(!is_past_due(owed, None, today));
+        assert!(!is_past_due(owed, Some("n/a"), today));
+    }
 
     #[test]
     fn refresh_gate_respects_session_and_toggle() {
