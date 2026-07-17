@@ -178,15 +178,31 @@ pub fn summary(ctx: &Ctx) -> Result<()> {
 
 // --- snapshot -------------------------------------------------------------
 
-pub fn snapshot(ctx: &Ctx) -> Result<()> {
+pub fn snapshot(ctx: &Ctx, all_accounts: bool) -> Result<()> {
     let portal = ctx.portal()?;
-    let s = portal.snapshot()?;
-    if ctx.fmt.json {
-        // The whole point is the nested object; emit it verbatim.
-        ctx.fmt.print_json(&s)?;
-        return Ok(());
+    if all_accounts {
+        let snaps = portal.snapshot_all()?;
+        if ctx.fmt.json {
+            // An array keeps the shape stable regardless of account count.
+            ctx.fmt.print_json(&snaps)?;
+        } else {
+            for s in &snaps {
+                print_snapshot_kv(ctx, s);
+            }
+        }
+    } else {
+        let s = portal.snapshot()?;
+        if ctx.fmt.json {
+            ctx.fmt.print_json(&s)?;
+        } else {
+            print_snapshot_kv(ctx, &s);
+        }
     }
-    // Table/CSV: flatten the nested usage/ledger into readable rows.
+    Ok(())
+}
+
+/// Render one snapshot as a flattened key/value block (table/CSV).
+fn print_snapshot_kv(ctx: &Ctx, s: &tojfl_sdk::Snapshot) {
     let last_payment = match (&s.last_payment_amount, &s.last_payment_date) {
         (None, None) => "—".to_string(),
         (a, d) => format!("{} on {}", opt(a), opt(d)),
@@ -203,8 +219,12 @@ pub fn snapshot(ctx: &Ctx) -> Result<()> {
         ),
         None => "—".to_string(),
     };
+    let title = match &s.account {
+        Some(a) => format!("Account Snapshot — {a}"),
+        None => "Account Snapshot".to_string(),
+    };
     ctx.fmt.print_kv(
-        "Account Snapshot",
+        &title,
         &[
             ("Account #", opt(&s.account)),
             ("Balance", opt(&s.balance)),
@@ -217,7 +237,6 @@ pub fn snapshot(ctx: &Ctx) -> Result<()> {
             ("Ledger net", s.ledger.net.to_string()),
         ],
     );
-    Ok(())
 }
 
 // --- account --------------------------------------------------------------

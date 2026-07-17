@@ -110,7 +110,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Command::Profile(c) => commands::profile(&ctx, c),
         Command::Ebill(c) => commands::ebill(&ctx, c),
         Command::Summary => commands::summary(&ctx),
-        Command::Snapshot => commands::snapshot(&ctx),
+        Command::Snapshot { all_accounts } => commands::snapshot(&ctx, *all_accounts),
         Command::Service => commands::service(&ctx),
         Command::Contact => commands::contact(&ctx),
         Command::Config(c) => commands::config_cmd(&ctx, c),

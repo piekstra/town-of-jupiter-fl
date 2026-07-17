@@ -257,6 +257,31 @@ impl Portal {
     /// last payment, usage stats, and ledger totals — one authenticated call.
     pub fn snapshot(&self) -> Result<Snapshot> {
         self.ready()?;
+        self.build_snapshot()
+    }
+
+    /// A snapshot for every linked account. Authenticates once, then activates
+    /// and snapshots each account in turn. Ignores `--account`/`default_account`
+    /// (the point is all of them); a single-account login yields one entry.
+    pub fn snapshot_all(&self) -> Result<Vec<Snapshot>> {
+        self.ensure_authenticated()?;
+        let accounts = accounts::list(&self.client)?;
+        let mut out = Vec::with_capacity(accounts.len());
+        for a in &accounts {
+            if !accounts::select(&self.client, &a.account_number)? {
+                return Err(accounts::not_linked(
+                    &a.account_number,
+                    &accounts::numbers(&self.client)?,
+                ));
+            }
+            out.push(self.build_snapshot()?);
+        }
+        Ok(out)
+    }
+
+    /// Build a snapshot of the currently-active account. Assumes the caller has
+    /// already authenticated and activated the desired account.
+    fn build_snapshot(&self) -> Result<Snapshot> {
         let account = self.fetch_account()?;
         let service = self.fetch_service()?;
         let usage_records = usage::fetch(&self.client)?;
