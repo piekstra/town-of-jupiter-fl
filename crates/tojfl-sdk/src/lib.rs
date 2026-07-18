@@ -286,11 +286,24 @@ impl Portal {
         let service = self.fetch_service()?;
         let usage_records = usage::fetch(&self.client)?;
         let txns = scrape::parse_transactions(&self.client.get_text(pages::TRANSACTION_HISTORY)?);
+        // A just-submitted payment shows in the ledger as "Pending" before the
+        // balance reflects it; surface that so callers see the effective owed.
+        let pending = model::pending_payment_total(&txns);
+        let (pending_payments, effective_balance) = if pending.cents > 0 {
+            let eff = account
+                .balance
+                .map(|b| Money::from_cents(b.cents - pending.cents));
+            (Some(pending), eff)
+        } else {
+            (None, None)
+        };
         Ok(Snapshot {
             account: (!account.account_number.is_empty()).then(|| account.account_number.clone()),
             past_due: is_past_due(account.balance, account.due_date.as_deref(), date::today()),
             balance: account.balance,
             due_date: account.due_date,
+            pending_payments,
+            effective_balance,
             last_payment_amount: service.last_payment_amount,
             last_payment_date: service.last_payment_date,
             usage: UsageStats::from_records(&usage_records),

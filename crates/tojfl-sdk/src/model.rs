@@ -128,6 +128,14 @@ pub struct Snapshot {
     pub due_date: Option<String>,
     /// Whether a balance is owed and the due date has already passed.
     pub past_due: bool,
+    /// Total of payments still marked "Pending" in the ledger (positive
+    /// magnitude), if any. The balance doesn't reflect these until they clear.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pending_payments: Option<Money>,
+    /// Balance minus pending payments — what you'll owe once they clear. Only
+    /// set when there are pending payments (otherwise it equals `balance`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effective_balance: Option<Money>,
     /// Most recent payment amount, if the portal shows one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_payment_amount: Option<Money>,
@@ -368,6 +376,28 @@ pub struct Transaction {
     pub extra: std::collections::BTreeMap<String, String>,
 }
 
+impl Transaction {
+    /// Whether this ledger entry is still marked "Pending" by the portal
+    /// (e.g. a just-submitted payment: `"Payment - Thank You (Pending)"`).
+    pub fn is_pending(&self) -> bool {
+        self.description.to_lowercase().contains("pending")
+    }
+}
+
+/// Total of ledger entries that are still-pending **payments** (a pending
+/// credit — negative amount), as a positive magnitude. Zero when there are none.
+/// The account balance doesn't reflect these until they clear.
+pub fn pending_payment_total(txns: &[Transaction]) -> Money {
+    let cents: i64 = txns
+        .iter()
+        .filter(|t| t.is_pending())
+        .filter_map(|t| t.amount)
+        .map(|m| m.cents)
+        .filter(|c| *c < 0)
+        .sum();
+    Money::from_cents(-cents)
+}
+
 /// Totals over a set of ledger [`Transaction`]s. The portal signs amounts with
 /// charges/debits positive and payments/credits negative, so we split on sign.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -550,6 +580,23 @@ mod tests {
         assert_eq!(s.charges, Money::from_cents(6176)); // 5676 + 500
         assert_eq!(s.payments, Money::from_cents(6149)); // |−5649| + |−500|, positive
         assert_eq!(s.net, Money::from_cents(27)); // 6176 − 6149
+    }
+
+    #[test]
+    fn pending_payment_total_sums_pending_credits_only() {
+        let txns = vec![
+            txn("Payment - Thank You (Pending)", Some(-5676)), // pending payment
+            txn("Payment - Thank You", Some(-5649)),           // cleared payment, ignored
+            txn("Cycle Bill (Pending)", Some(6000)),           // a pending charge, not a payment
+            txn("Pending Adjustment", None),                   // no amount, ignored
+        ];
+        // Only the pending credit counts, as a positive magnitude.
+        assert_eq!(pending_payment_total(&txns), Money::from_cents(5676));
+        // No pending rows → zero.
+        assert_eq!(
+            pending_payment_total(&[txn("Payment - Thank You", Some(-100))]),
+            Money::ZERO
+        );
     }
 
     #[test]
