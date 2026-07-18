@@ -202,9 +202,11 @@ pub fn snapshot(ctx: &Ctx, all_accounts: bool) -> Result<()> {
     Ok(())
 }
 
-const SNAPSHOT_COLUMNS: [&str; 9] = [
+const SNAPSHOT_COLUMNS: [&str; 11] = [
     "Account #",
     "Balance",
+    "Pending",
+    "Effective",
     "Due date",
     "Past due",
     "Last payment",
@@ -219,6 +221,8 @@ fn snapshot_row(s: &tojfl_sdk::Snapshot) -> Vec<String> {
     vec![
         opt(&s.account),
         opt(&s.balance),
+        opt(&s.pending_payments),
+        opt(&s.effective_balance),
         opt(&s.due_date),
         if s.past_due { "yes" } else { "no" }.into(),
         snapshot_last_payment(s),
@@ -253,20 +257,25 @@ fn snapshot_usage(s: &tojfl_sdk::Snapshot) -> String {
 
 /// Render one snapshot as a flattened key/value block (single-account view).
 fn print_snapshot_kv(ctx: &Ctx, s: &tojfl_sdk::Snapshot) {
-    ctx.fmt.print_kv(
-        "Account Snapshot",
-        &[
-            ("Account #", opt(&s.account)),
-            ("Balance", opt(&s.balance)),
-            ("Due date", opt(&s.due_date)),
-            ("Past due", if s.past_due { "yes" } else { "no" }.into()),
-            ("Last payment", snapshot_last_payment(s)),
-            ("Usage", snapshot_usage(s)),
-            ("Ledger charges", s.ledger.charges.to_string()),
-            ("Ledger payments", s.ledger.payments.to_string()),
-            ("Ledger net", s.ledger.net.to_string()),
-        ],
-    );
+    let mut pairs: Vec<(&str, String)> =
+        vec![("Account #", opt(&s.account)), ("Balance", opt(&s.balance))];
+    // Only present when a payment is still pending (otherwise balance is final).
+    if let Some(p) = &s.pending_payments {
+        pairs.push(("Pending payments", p.to_string()));
+    }
+    if let Some(e) = &s.effective_balance {
+        pairs.push(("Effective balance", e.to_string()));
+    }
+    pairs.extend([
+        ("Due date", opt(&s.due_date)),
+        ("Past due", if s.past_due { "yes" } else { "no" }.into()),
+        ("Last payment", snapshot_last_payment(s)),
+        ("Usage", snapshot_usage(s)),
+        ("Ledger charges", s.ledger.charges.to_string()),
+        ("Ledger payments", s.ledger.payments.to_string()),
+        ("Ledger net", s.ledger.net.to_string()),
+    ]);
+    ctx.fmt.print_kv("Account Snapshot", &pairs);
 }
 
 // --- account --------------------------------------------------------------
