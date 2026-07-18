@@ -202,9 +202,11 @@ pub fn snapshot(ctx: &Ctx, all_accounts: bool) -> Result<()> {
     Ok(())
 }
 
-const SNAPSHOT_COLUMNS: [&str; 9] = [
+const SNAPSHOT_COLUMNS: [&str; 11] = [
     "Account #",
     "Balance",
+    "Pending",
+    "Effective",
     "Due date",
     "Past due",
     "Last payment",
@@ -219,6 +221,8 @@ fn snapshot_row(s: &tojfl_sdk::Snapshot) -> Vec<String> {
     vec![
         opt(&s.account),
         opt(&s.balance),
+        opt(&s.pending_payments),
+        opt(&s.effective_balance),
         opt(&s.due_date),
         if s.past_due { "yes" } else { "no" }.into(),
         snapshot_last_payment(s),
