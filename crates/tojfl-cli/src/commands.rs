@@ -1359,8 +1359,30 @@ fn date_bound(value: &Option<String>, flag: &str) -> Result<Option<tojfl_sdk::da
 
 #[cfg(test)]
 mod tests {
-    use super::{apply_config_key, derive_pay_numbers, portal_login_url};
-    use tojfl_sdk::{Account, Config};
+    use super::{apply_config_key, derive_pay_numbers, iso_date, pk_money, portal_login_url};
+    use tojfl_sdk::{Account, Config, Money};
+
+    #[test]
+    fn pk_money_renders_signed_decimal_strings() {
+        let s = |m: Money| pk_money(m).amount;
+        assert_eq!(s(Money::ZERO), "0.00");
+        assert_eq!(s(Money::from_cents(150)), "1.50");
+        assert_eq!(s(Money::from_cents(8421)), "84.21");
+        assert_eq!(s(Money::from_cents(5)), "0.05");
+        assert_eq!(s(Money::from_cents(-5)), "-0.05");
+        assert_eq!(s(Money::from_cents(-8421)), "-84.21");
+        assert_eq!(s(Money::from_cents(123400)), "1234.00");
+        assert_eq!(pk_money(Money::from_cents(150)).currency, "USD");
+    }
+
+    #[test]
+    fn iso_date_normalizes_portal_formats() {
+        assert_eq!(iso_date("07/18/2026"), "2026-07-18");
+        assert_eq!(iso_date("Jul 5, 2026"), "2026-07-05");
+        assert_eq!(iso_date("2026-07-18"), "2026-07-18");
+        // Unrecognized text passes through verbatim rather than being lost.
+        assert_eq!(iso_date("pending"), "pending");
+    }
 
     fn acct(cust: &str, num: &str) -> Account {
         Account {
