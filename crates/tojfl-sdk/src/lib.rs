@@ -75,6 +75,19 @@ fn should_refresh(has_session: bool, auto_login: Option<bool>) -> bool {
     has_session && auto_login.unwrap_or(true)
 }
 
+/// Find the linked account whose number matches `account_number`, tolerant of
+/// leading-zero differences between how the landing page and the accounts grid
+/// render it.
+fn find_linked<'a>(
+    accounts: &'a [LinkedAccount],
+    account_number: &str,
+) -> Option<&'a LinkedAccount> {
+    let key = account_number.trim_start_matches('0');
+    accounts
+        .iter()
+        .find(|a| a.account_number.trim_start_matches('0') == key)
+}
+
 /// Whether a balance is owed *and* the due date has already passed as of
 /// `today`. An unparseable/absent due date, or a zero/credit balance, is not
 /// past due.
@@ -236,10 +249,24 @@ impl Portal {
 
     // --- authenticated data ----------------------------------------------
 
-    /// Account summary from the post-login landing page (balance, due date, ...).
+    /// Account summary from the post-login landing page (balance, due date, ...),
+    /// enriched with the account holder name + service address (which come from
+    /// the linked-accounts list, not the landing page).
     pub fn account_summary(&self) -> Result<Account> {
         self.ready()?;
-        self.fetch_account()
+        let mut acct = self.fetch_account()?;
+        if acct.name.is_none() || acct.service_address.is_none() {
+            let accounts = accounts::list(&self.client)?;
+            if let Some(l) = find_linked(&accounts, &acct.account_number) {
+                if acct.name.is_none() {
+                    acct.name = l.name.clone();
+                }
+                if acct.service_address.is_none() {
+                    acct.service_address = l.service_address.clone();
+                }
+            }
+        }
+        Ok(acct)
     }
 
     /// An at-a-glance overview (account summary + service snapshot + enrollment),
@@ -257,7 +284,21 @@ impl Portal {
     /// last payment, usage stats, and ledger totals — one authenticated call.
     pub fn snapshot(&self) -> Result<Snapshot> {
         self.ready()?;
-        self.build_snapshot()
+        let snap = self.build_snapshot(None)?;
+        // Attach human identity (name / service address) for the active account.
+        let accounts = accounts::list(&self.client)?;
+        if let Some(l) = snap
+            .account
+            .as_deref()
+            .and_then(|n| find_linked(&accounts, n))
+        {
+            return Ok(Snapshot {
+                name: l.name.clone(),
+                service_address: l.service_address.clone(),
+                ..snap
+            });
+        }
+        Ok(snap)
     }
 
     /// A snapshot for every linked account. Authenticates once, then activates
@@ -274,14 +315,15 @@ impl Portal {
                     &accounts::numbers(&self.client)?,
                 ));
             }
-            out.push(self.build_snapshot()?);
+            out.push(self.build_snapshot(Some(a))?);
         }
         Ok(out)
     }
 
     /// Build a snapshot of the currently-active account. Assumes the caller has
-    /// already authenticated and activated the desired account.
-    fn build_snapshot(&self) -> Result<Snapshot> {
+    /// already authenticated and activated the desired account. `identity` (the
+    /// matching linked account, if known) supplies the name / service address.
+    fn build_snapshot(&self, identity: Option<&LinkedAccount>) -> Result<Snapshot> {
         let account = self.fetch_account()?;
         let service = self.fetch_service()?;
         let usage_records = usage::fetch(&self.client)?;
@@ -299,6 +341,8 @@ impl Portal {
         };
         Ok(Snapshot {
             account: (!account.account_number.is_empty()).then(|| account.account_number.clone()),
+            name: identity.and_then(|l| l.name.clone()),
+            service_address: identity.and_then(|l| l.service_address.clone()),
             past_due: is_past_due(account.balance, account.due_date.as_deref(), date::today()),
             balance: account.balance,
             due_date: account.due_date,
@@ -448,8 +492,35 @@ impl Portal {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_past_due, should_refresh};
-    use crate::model::Money;
+    use super::{find_linked, is_past_due, should_refresh};
+    use crate::model::{LinkedAccount, Money};
+
+    #[test]
+    fn find_linked_matches_tolerating_leading_zeros() {
+        let accounts = vec![
+            LinkedAccount {
+                account_number: "004008".into(),
+                name: Some("A".into()),
+                service_address: Some("1 St".into()),
+                ..Default::default()
+            },
+            LinkedAccount {
+                account_number: "150005".into(),
+                service_address: Some("2 Ave".into()),
+                ..Default::default()
+            },
+        ];
+        assert_eq!(
+            find_linked(&accounts, "4008").map(|l| l.account_number.as_str()),
+            Some("004008"),
+            "leading zeros on either side still match"
+        );
+        assert_eq!(
+            find_linked(&accounts, "150005").map(|l| l.service_address.as_deref()),
+            Some(Some("2 Ave"))
+        );
+        assert!(find_linked(&accounts, "999999").is_none());
+    }
 
     #[test]
     fn past_due_needs_both_a_balance_and_a_passed_due_date() {
