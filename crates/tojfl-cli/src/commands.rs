@@ -788,14 +788,59 @@ fn transactions_summary(
 
 pub fn pay(ctx: &Ctx, cmd: &PayCmd) -> Result<()> {
     match cmd {
-        PayCmd::Quote(args) => pay_quote(ctx, &args.customer, &args.account, false),
-        PayCmd::Open(args) => pay_open(ctx, args),
+        PayCmd::Quote(args) => {
+            let (c, a, acct) = resolve_pay_target(ctx, &args.customer, &args.account)?;
+            pay_quote(ctx, &c, &a, acct.as_ref())
+        }
+        PayCmd::Open(args) => {
+            let (c, a, acct) = resolve_pay_target(ctx, &args.customer, &args.account)?;
+            pay_open(ctx, &c, &a, args.open, acct.as_ref())
+        }
     }
 }
 
-fn pay_quote(ctx: &Ctx, customer: &str, account: &str, _open: bool) -> Result<()> {
+/// Resolve the customer/account to pay. If both are given, use them (a pure
+/// guest lookup, no login). Otherwise fill the missing part(s) from the
+/// logged-in **active** account (honoring `--account`), returning that account
+/// so callers can confirm *which* premise is being paid.
+fn resolve_pay_target(
+    ctx: &Ctx,
+    customer: &Option<String>,
+    account: &Option<String>,
+) -> Result<(String, String, Option<tojfl_sdk::Account>)> {
+    if let (Some(c), Some(a)) = (customer, account) {
+        return Ok((c.clone(), a.clone(), None));
+    }
     let portal = ctx.portal()?;
-    let quote = portal.payment_quote(customer, account)?;
+    let acct = portal.account_summary()?;
+    let c = customer
+        .clone()
+        .unwrap_or_else(|| acct.customer_number.clone());
+    let a = account
+        .clone()
+        .unwrap_or_else(|| acct.account_number.clone());
+    if c.is_empty() || a.is_empty() {
+        return Err(tojfl_sdk::Error::Invalid(
+            "could not determine the customer/account to pay — pass -c and -a, \
+             or log in so they can be read from your active account"
+                .into(),
+        )
+        .into());
+    }
+    Ok((c, a, Some(acct)))
+}
+
+fn pay_quote(
+    ctx: &Ctx,
+    customer: &str,
+    account: &str,
+    acct: Option<&tojfl_sdk::Account>,
+) -> Result<()> {
+    let portal = ctx.portal()?;
+    let mut quote = portal.payment_quote(customer, account)?;
+    if quote.account_name.is_none() {
+        quote.account_name = acct.and_then(|a| a.name.clone());
+    }
     if ctx.fmt.json {
         ctx.fmt.print_json(&quote)?;
     } else {
@@ -804,6 +849,11 @@ fn pay_quote(ctx: &Ctx, customer: &str, account: &str, _open: bool) -> Result<()
             &[
                 ("Customer #", quote.customer_number.clone()),
                 ("Account #", quote.account_number.clone()),
+                ("Name", opt(&quote.account_name)),
+                (
+                    "Service address",
+                    opt(&acct.and_then(|a| a.service_address.clone())),
+                ),
                 ("Amount due", opt(&quote.amount_due)),
                 ("Valid", quote.valid.to_string()),
                 ("Message", opt(&quote.message)),
@@ -817,17 +867,29 @@ fn pay_quote(ctx: &Ctx, customer: &str, account: &str, _open: bool) -> Result<()
     Ok(())
 }
 
-fn pay_open(ctx: &Ctx, args: &PayOpenArgs) -> Result<()> {
+fn pay_open(
+    ctx: &Ctx,
+    customer: &str,
+    account: &str,
+    open: bool,
+    acct: Option<&tojfl_sdk::Account>,
+) -> Result<()> {
     let portal = ctx.portal()?;
-    let quote = portal.payment_quote(&args.customer, &args.account)?;
+    let mut quote = portal.payment_quote(customer, account)?;
+    if quote.account_name.is_none() {
+        quote.account_name = acct.and_then(|a| a.name.clone());
+    }
     match &quote.hosted_payment_url {
         Some(url) => {
-            if args.open {
+            if open {
                 open_in_browser(url)?;
             }
             if ctx.fmt.json {
                 ctx.fmt.print_json(&quote)?;
             } else {
+                if let Some(name) = &quote.account_name {
+                    println!("Paying: {name} (account {})", quote.account_number);
+                }
                 println!("Hosted payment page: {url}");
                 println!("Amount due: {}", opt(&quote.amount_due));
                 println!(
