@@ -261,14 +261,14 @@ fn snapshot_usage(s: &tojfl_sdk::Snapshot) -> String {
 
 /// Render one snapshot as a flattened key/value block (single-account view).
 fn print_snapshot_kv(ctx: &Ctx, s: &tojfl_sdk::Snapshot) {
-    let mut pairs: Vec<(&str, String)> = vec![("Account #", opt(&s.account))];
-    if s.name.is_some() {
-        pairs.push(("Name", opt(&s.name)));
-    }
-    if s.service_address.is_some() {
-        pairs.push(("Service address", opt(&s.service_address)));
-    }
-    pairs.push(("Balance", opt(&s.balance)));
+    // Always shown (matching `account show` and the --all-accounts table),
+    // "—" when absent — unlike the genuinely-optional pending rows below.
+    let mut pairs: Vec<(&str, String)> = vec![
+        ("Account #", opt(&s.account)),
+        ("Name", opt(&s.name)),
+        ("Service address", opt(&s.service_address)),
+        ("Balance", opt(&s.balance)),
+    ];
     // Only present when a payment is still pending (otherwise balance is final).
     if let Some(p) = &s.pending_payments {
         pairs.push(("Pending payments", p.to_string()));
