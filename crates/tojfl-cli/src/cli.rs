@@ -322,6 +322,19 @@ pub enum ConfigCmd {
     Init,
     /// Show the effective (loaded) configuration.
     Show,
+    /// Set a config value, e.g. `config set default_account 000000`. Keys:
+    /// default_account, username, base_url, output, timeout_secs, auto_login.
+    Set {
+        /// Config key to set.
+        key: String,
+        /// Value to store.
+        value: String,
+    },
+    /// Clear a config value, e.g. `config unset default_account`.
+    Unset {
+        /// Config key to clear.
+        key: String,
+    },
     /// Store the portal password in the OS keychain.
     SetPassword,
     /// Remove the stored password from the OS keychain.
