@@ -103,8 +103,8 @@ password from the keychain if present; pipe one explicitly with
 | `tojfl transactions summary [--since/--until DATE]` | Totals: charges, payments/credits, and net over the ledger |
 | `tojfl profile show` | Account holder profile |
 | `tojfl ebill status` | Paperless / autopay enrollment status |
-| `tojfl pay quote -c CUST -a ACCT` | Look up an account and report the amount due (no login) |
-| `tojfl pay open  -c CUST -a ACCT [--open]` | Print / open the hosted payment page URL |
+| `tojfl pay quote [-c CUST -a ACCT]` | Amount due for an account; omit `-c/-a` to use your logged-in account |
+| `tojfl pay open [-c CUST -a ACCT] [--open]` | Print/open the hosted payment page URL (omit `-c/-a` for your logged-in account) |
 | `tojfl service` | Service snapshot: last read date, last bill, last payment |
 | `tojfl contact` | Utility contact & service info (offline) |
 | `tojfl open [ACCT]` | Open the utility portal in your browser (log in there) |
@@ -149,9 +149,15 @@ your customer/account pair and reads back the amount due, then points you at the
 **hosted payment page** where card entry happens.
 
 ```bash
-tojfl pay quote -c 0000000 -a 000000        # what do I owe?
-tojfl pay open  -c 0000000 -a 000000 --open # open the secure payment page
+tojfl pay quote                             # your logged-in account (name/address shown)
+tojfl pay open --open                        # open the secure payment page for it
+tojfl pay quote -c 0000000 -a 000000        # or an explicit account (no login needed)
 ```
+
+When logged in, omit `-c/-a` and the customer/account come from your **active**
+account (honoring `--account`); the quote also shows the account **name**
+(`account_name` in `--json`) and, in the default table view, the **service
+address**, so you can confirm you're paying the right premise.
 
 This tool **never handles card data.** It stops at the hosted processor page,
 by design — see below.

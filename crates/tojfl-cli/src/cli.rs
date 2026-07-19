@@ -288,22 +288,26 @@ pub enum PayCmd {
 
 #[derive(Debug, Args)]
 pub struct PayLookupArgs {
-    /// 7-digit customer number (with leading zeros).
+    /// 7-digit customer number (with leading zeros). Defaults to your logged-in
+    /// account when omitted.
     #[arg(long, short = 'c', value_name = "CUSTOMER")]
-    pub customer: String,
-    /// 6-digit account number (with leading zeros).
+    pub customer: Option<String>,
+    /// 6-digit account number (with leading zeros). Defaults to your logged-in
+    /// account when omitted.
     #[arg(long, short = 'a', value_name = "ACCOUNT")]
-    pub account: String,
+    pub account: Option<String>,
 }
 
 #[derive(Debug, Args)]
 pub struct PayOpenArgs {
-    /// 7-digit customer number (with leading zeros).
+    /// 7-digit customer number (with leading zeros). Defaults to your logged-in
+    /// account when omitted.
     #[arg(long, short = 'c', value_name = "CUSTOMER")]
-    pub customer: String,
-    /// 6-digit account number (with leading zeros).
+    pub customer: Option<String>,
+    /// 6-digit account number (with leading zeros). Defaults to your logged-in
+    /// account when omitted.
     #[arg(long, short = 'a', value_name = "ACCOUNT")]
-    pub account: String,
+    pub account: Option<String>,
     /// Open the hosted payment page in your default browser.
     #[arg(long)]
     pub open: bool,
