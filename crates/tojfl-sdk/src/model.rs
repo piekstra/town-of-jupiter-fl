@@ -120,6 +120,13 @@ pub struct Snapshot {
     /// Active account number, if known.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub account: Option<String>,
+    /// Account holder name (from the linked-accounts list), if known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Service address / premise (from the linked-accounts list), if known —
+    /// identifies *which* account this is, not just its number.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub service_address: Option<String>,
     /// Current balance due.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub balance: Option<Money>,

@@ -88,8 +88,8 @@ password from the keychain if present; pipe one explicitly with
 | `tojfl auth logout [--forget]` | Clear the session (and optionally the keychain password) |
 | `tojfl auth status` | Report whether a valid session exists |
 | `tojfl summary` | At-a-glance overview: balance, due, last read/bill/payment, paperless + autopay |
-| `tojfl snapshot [--all-accounts]` | One-call dashboard payload: balance (plus pending payments / effective balance), due/past-due, last payment, usage stats, ledger totals (best with `--json`; `--all-accounts` returns one per linked account) |
-| `tojfl account show` | Account summary: account #, balance, due date (for the active account) |
+| `tojfl snapshot [--all-accounts]` | One-call dashboard payload: account name + service address, balance (plus pending payments / effective balance), due/past-due, last payment, usage stats, ledger totals (best with `--json`; `--all-accounts` returns one per linked account) |
+| `tojfl account show` | Account summary: account #, **name, service address**, balance, due date (for the active account) |
 | `tojfl account list` | All accounts linked to your login (#, name, service address, balances) |
 | `tojfl balance` | Just the current balance due |
 | `tojfl bills list [--limit N] [--since/--until DATE]` | Billing history (statements); a `PDF` column shows which are downloadable |

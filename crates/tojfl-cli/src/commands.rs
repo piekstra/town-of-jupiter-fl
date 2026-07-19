@@ -202,8 +202,10 @@ pub fn snapshot(ctx: &Ctx, all_accounts: bool) -> Result<()> {
     Ok(())
 }
 
-const SNAPSHOT_COLUMNS: [&str; 11] = [
+const SNAPSHOT_COLUMNS: [&str; 13] = [
     "Account #",
+    "Name",
+    "Service address",
     "Balance",
     "Pending",
     "Effective",
@@ -220,6 +222,8 @@ const SNAPSHOT_COLUMNS: [&str; 11] = [
 fn snapshot_row(s: &tojfl_sdk::Snapshot) -> Vec<String> {
     vec![
         opt(&s.account),
+        opt(&s.name),
+        opt(&s.service_address),
         opt(&s.balance),
         opt(&s.pending_payments),
         opt(&s.effective_balance),
@@ -257,8 +261,14 @@ fn snapshot_usage(s: &tojfl_sdk::Snapshot) -> String {
 
 /// Render one snapshot as a flattened key/value block (single-account view).
 fn print_snapshot_kv(ctx: &Ctx, s: &tojfl_sdk::Snapshot) {
-    let mut pairs: Vec<(&str, String)> =
-        vec![("Account #", opt(&s.account)), ("Balance", opt(&s.balance))];
+    let mut pairs: Vec<(&str, String)> = vec![("Account #", opt(&s.account))];
+    if s.name.is_some() {
+        pairs.push(("Name", opt(&s.name)));
+    }
+    if s.service_address.is_some() {
+        pairs.push(("Service address", opt(&s.service_address)));
+    }
+    pairs.push(("Balance", opt(&s.balance)));
     // Only present when a payment is still pending (otherwise balance is final).
     if let Some(p) = &s.pending_payments {
         pairs.push(("Pending payments", p.to_string()));
