@@ -5,9 +5,12 @@ welcome.
 
 ## Ground rules
 
-- **Never commit secrets or personal data.** Credentials come from flags, env,
-  the OS keychain, or a gitignored config — never the repo. No real account
-  numbers, addresses, or portal responses in code, tests, or fixtures.
+- **Never commit secrets or personal data — including in tests.** Credentials
+  come from flags, env, the OS keychain, or a gitignored config — never the repo.
+  No real account numbers, names, addresses, or portal responses in code, tests,
+  or fixtures. The CLI handles real PII at runtime (that's its job); test
+  fixtures use only obvious placeholders (e.g. `001234`, `100 MAPLE AVE`). If you
+  pasted a real value from a live run, scrub it before committing.
 - Keep the working tree clean: `make check` (fmt + clippy `-D warnings` + tests +
   build) must pass before you push.
 
