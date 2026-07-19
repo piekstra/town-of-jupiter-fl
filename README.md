@@ -139,7 +139,7 @@ tojfl --account 000000 bills list      # statements for account 000000
 tojfl --account 000000 usage list
 ```
 
-Set `default_account` in your config to avoid repeating `--account`.
+Run `tojfl config set account <ACCOUNT#>` to avoid repeating `--account`.
 
 ### Paying a bill
 

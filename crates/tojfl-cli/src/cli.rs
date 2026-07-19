@@ -330,7 +330,7 @@ pub enum ConfigCmd {
         /// Value to store.
         value: String,
     },
-    /// Clear a config value, e.g. `config unset default_account`.
+    /// Clear a config value, e.g. `config unset account`.
     Unset {
         /// Config key to clear.
         key: String,
