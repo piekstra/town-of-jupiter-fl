@@ -322,8 +322,8 @@ pub enum ConfigCmd {
     Init,
     /// Show the effective (loaded) configuration.
     Show,
-    /// Set a config value, e.g. `config set default_account 000000`. Keys:
-    /// default_account, username, base_url, output, timeout_secs, auto_login.
+    /// Set a config value, e.g. `config set account 000000`. Keys: account,
+    /// username, base_url, output, timeout_secs, auto_login (piekstra-cli/1).
     Set {
         /// Config key to set.
         key: String,

@@ -1034,7 +1034,9 @@ fn config_set(key: &str, value: Option<&str>) -> Result<()> {
 fn apply_config_key(cfg: &mut Config, key: &str, value: Option<&str>) -> Result<()> {
     let usage = |m: String| -> anyhow::Error { tojfl_sdk::Error::Invalid(m).into() };
     match key {
-        "default_account" => cfg.default_account = value.map(String::from),
+        // `account` is the piekstra-cli/1 spec key (DESIGN.md §1.2); accept the
+        // `default_account` field name as an alias.
+        "account" | "default_account" => cfg.default_account = value.map(String::from),
         "username" => cfg.username = value.map(String::from),
         "base_url" => cfg.base_url = value.map(String::from),
         "output" => {
@@ -1065,7 +1067,7 @@ fn apply_config_key(cfg: &mut Config, key: &str, value: Option<&str>) -> Result<
         }
         other => {
             return Err(usage(format!(
-                "unknown config key '{other}' (settable: default_account, username, base_url, \
+                "unknown config key '{other}' (settable: account, username, base_url, \
                  output, timeout_secs, auto_login)"
             )));
         }
@@ -1177,7 +1179,8 @@ mod tests {
     fn apply_config_key_sets_clears_and_validates() {
         let mut cfg = Config::default();
 
-        apply_config_key(&mut cfg, "default_account", Some("000000")).unwrap();
+        // Spec key `account` and the `default_account` alias both set the field.
+        apply_config_key(&mut cfg, "account", Some("000000")).unwrap();
         assert_eq!(cfg.default_account.as_deref(), Some("000000"));
         apply_config_key(&mut cfg, "default_account", None).unwrap();
         assert_eq!(cfg.default_account, None);
