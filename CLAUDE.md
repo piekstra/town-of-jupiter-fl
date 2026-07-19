@@ -85,6 +85,13 @@ fixtures — no network. `Money`, DNN field extraction, each table parser, and t
 payment helpers are covered. Public flows are additionally exercised against the
 live site by hand (`tojfl contact`, `tojfl pay quote …`).
 
+**Never commit real PII — including in tests or fixtures.** The CLI necessarily
+handles real account numbers, names, addresses, and portal responses *at
+runtime*; that data must never be copied into the repo. Fixtures and test
+assertions use only obviously-synthetic placeholders (e.g. account `001234`,
+`100 MAPLE AVE`). When you have a real value in front of you (a live `--json`
+dump), scrub it to a placeholder before it goes anywhere near a commit.
+
 ## Self-update & releases
 
 `crates/tojfl-cli/src/selfupdate.rs` (`tojfl self-update`) uses the `self_update`

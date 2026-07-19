@@ -499,24 +499,24 @@ mod tests {
     fn find_linked_matches_tolerating_leading_zeros() {
         let accounts = vec![
             LinkedAccount {
-                account_number: "004008".into(),
+                account_number: "001234".into(),
                 name: Some("A".into()),
                 service_address: Some("1 St".into()),
                 ..Default::default()
             },
             LinkedAccount {
-                account_number: "150005".into(),
+                account_number: "567890".into(),
                 service_address: Some("2 Ave".into()),
                 ..Default::default()
             },
         ];
         assert_eq!(
-            find_linked(&accounts, "4008").map(|l| l.account_number.as_str()),
-            Some("004008"),
+            find_linked(&accounts, "1234").map(|l| l.account_number.as_str()),
+            Some("001234"),
             "leading zeros on either side still match"
         );
         assert_eq!(
-            find_linked(&accounts, "150005").map(|l| l.service_address.as_deref()),
+            find_linked(&accounts, "567890").map(|l| l.service_address.as_deref()),
             Some(Some("2 Ave"))
         );
         assert!(find_linked(&accounts, "999999").is_none());
